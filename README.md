@@ -1,6 +1,5 @@
 # DeepCubeA
-This is the code for DeepCubeA. The code is still in development as it is being updated for python3 and PyTorch.
-
+This is the code for DeepCubeA for python3 and PyTorch.
 For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
 
 # Setup
@@ -10,6 +9,12 @@ All packages should be able to be installed with pip
 Python version used: 3.7.2
 
 IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current directory to your python path.
+
+For the first run, make sure you create the following directories:
+mkdir data
+mkdir saved_models
+mkdir results
+mkdir results/cube3/
 
 # Sample script
 Here are the commands to quickly train DeepCubeA to solve the Rubik's cube.
@@ -34,6 +39,10 @@ During approximate value iteration (AVI), one can get better results by increasi
 One can also add additional states to training set by doing GBFS during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_gbfs_steps`)
 
 During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
+
+# Using DeepCubeA to Solve Your Own Problem
+You can create your own environment by implementing the abstract methods in environments/environment_abstract.py
+See environments/cube3.py for an example.
 
 # Parallelism
 Data generation, training, and solving can be easily parallelized across multiple CPUs and GPUs.
