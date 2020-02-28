@@ -45,8 +45,12 @@ One can also add additional states to training set by doing GBFS during the upda
 During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
 
 # Using DeepCubeA to Solve Your Own Problem
-You can create your own environment by implementing the abstract methods in environments/environment_abstract.py
-See environments/cube3.py for an example.
+Create your own environment by implementing the abstract methods in `environments/environment_abstract.py`
+See `environments/cube3.py` for an example.
+
+After implementing your method, edit `utils/env_utils.py` to return your environment object given your choosen keyword.
+
+Use `tests/fprop_test.py` to make sure basic aspects of your implementation are working correctly.
 
 # Parallelism
 Data generation, training, and solving can be easily parallelized across multiple CPUs and GPUs.
