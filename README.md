@@ -33,13 +33,15 @@ During approximate value iteration (AVI), one can get better results by increasi
 
 One can also add additional states to training set by doing GBFS during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_gbfs_steps`)
 
-During A* search, increasing the weight on the path cost (`--weight`) and the batch size (`--batch_size`) generally improves results.
+During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
 
 # Parallelism
 Data generation, training, and solving can be easily parallelized across multiple CPUs and GPUs.
 
-When generating data with `scripts/generate_dataset.py`, set the number of CPUs used with `--num_procs`
+When generating data with `scripts/generate_dataset.py`, set the number of CPUs with `--num_procs`
 
 When training with `ctg_approx/avi.py`, set the number of workers for doing approximate value iteration with `--num_update_procs`
+This will spawn a separate DNN for the update step for each worker, so marke sure you have enough memory.
+If multiple GPUs are used, then this will spread the workers across the GPUs.
 
-The number of CPUs and GPUs used can be controlled by setting the `CUDA_VISIBLE_DEVICES` environment variable
+The number of GPUs used can be controlled by setting the `CUDA_VISIBLE_DEVICES` environment variable.
