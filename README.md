@@ -12,8 +12,11 @@ IMPORTANT! Before running anything, please execute: `source setup.sh` in the Dee
 
 For the first run, make sure you create the following directories:
 mkdir data
+
 mkdir saved_models
+
 mkdir results
+
 mkdir results/cube3/
 
 # Sample script
