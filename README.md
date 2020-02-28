@@ -11,13 +11,11 @@ Python version used: 3.7.2
 IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current directory to your python path.
 
 For the first run, make sure you create the following directories:
-mkdir data
 
-mkdir saved_models
-
-mkdir results
-
-mkdir results/cube3/
+`mkdir data`
+`mkdir saved_models`
+`mkdir results`
+`mkdir results/cube3/`
 
 # Sample script
 Here are the commands to quickly train DeepCubeA to solve the Rubik's cube.
