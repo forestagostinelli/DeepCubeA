@@ -1,7 +1,7 @@
 # DeepCubeA
 This is the code for DeepCubeA for python3 and PyTorch.
 
-This is based on DeepCubeA[https://www.ics.uci.edu/~fagostin/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf]
+This is based on [DeepCubeA](https://www.ics.uci.edu/~fagostin/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf)
 
 For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
 
