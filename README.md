@@ -1,5 +1,9 @@
 # DeepCubeA
-This is the code for DeepCubeA for python3 and PyTorch.
+This is the code for [DeepCubeA](https://www.ics.uci.edu/~fagostin/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf) for python3 and PyTorch.
+The original python2, tensorflow code can be found on [CodeOcean](https://codeocean.com/capsule/5723040/tree/v1).
+
+This code is still under development, however, one should be able to use the DeepCubeA algorithm on the Rubik's cube as well as use DeepCubeA on their own environment.
+
 For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
 
 # Setup
