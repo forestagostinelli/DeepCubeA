@@ -40,7 +40,7 @@ Here are the commands to quickly train DeepCubeA to solve the Rubik's cube.
 ###### Improving Results
 During approximate value iteration (AVI), one can get better results by increasing the batch size (`--batch_size`) and number of states per update (`--states_per_update`). Increasing the number of updates (`--max_updates`) can also help.
 
-One can also add additional states to training set by doing GBFS during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_gbfs_steps`)
+One can also add additional states to training set by doing GBFS during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_gbfs_steps`). Setting `--max_update_gbfs_steps` to 1 is the same as doing approximate value iteration.
 
 During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
 
@@ -62,3 +62,9 @@ This will spawn a separate DNN for the update step for each worker, so marke sur
 If multiple GPUs are used, then this will spread the workers across the GPUs.
 
 The number of GPUs used can be controlled by setting the `CUDA_VISIBLE_DEVICES` environment variable.
+
+# Compiling c++
+mkdir build
+cd build
+cmake -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
+cmake --build . --config Release
