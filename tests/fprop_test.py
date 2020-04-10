@@ -37,7 +37,8 @@ def main():
 
     # load file
     start_time = time.time()
-    states: List[State] = env.generate_states(args.num_states, (0, args.back_max))
+    state: List[State]
+    states, _ = env.generate_states(args.num_states, (0, args.back_max))
 
     state_gen_time = time.time() - start_time
     states_gen_per_sec = len(states)/state_gen_time
