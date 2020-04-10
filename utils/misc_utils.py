@@ -2,7 +2,7 @@ from typing import List, Tuple, Any
 import numpy as np
 
 
-def flatten_list(data: List[List[Any]]) -> Tuple[List[Any], List[int]]:
+def flatten(data: List[List[Any]]) -> Tuple[List[Any], List[int]]:
     num_each = [len(x) for x in data]
     split_idxs: List[int] = list(np.cumsum(num_each)[:-1])
 
@@ -11,7 +11,7 @@ def flatten_list(data: List[List[Any]]) -> Tuple[List[Any], List[int]]:
     return data_flat, split_idxs
 
 
-def flat_to_list_of_lists(data: List[Any], split_idxs: List[int]) -> List[List[Any]]:
+def unflatten(data: List[Any], split_idxs: List[int]) -> List[List[Any]]:
     data_split: List[List[Any]] = []
 
     start_idx: int = 0

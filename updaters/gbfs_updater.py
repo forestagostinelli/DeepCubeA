@@ -1,38 +1,36 @@
-from typing import List, Tuple, Set
+from typing import List, Tuple
 import numpy as np
-from utils import nnet_utils, misc_utils
+from utils import nnet_utils, misc_utils, data_utils
 from environments.environment_abstract import Environment, State
 from search_methods.gbfs import GBFS
 from torch.multiprocessing import Queue, get_context
+import math
+import time
 
 
-def gbfs_runner(states_queue: Queue, all_zeros: bool, nnet_dir: str, device, on_gpu: bool, gpu_num: int,
-                nnet_batch_size: int, env: Environment, result_queue: Queue, num_steps: int,
+def gbfs_runner(num_states: int, data_files: List[str], update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
+                proc_id: int, env: Environment, result_queue: Queue, num_steps: int,
                 eps_max: float):
-    if all_zeros:
-        def heuristic_fn(x):
-            return np.zeros((len(x)), dtype=np.float)
-    else:
-        heuristic_fn = nnet_utils.load_heuristic_fn(nnet_dir, device, on_gpu, env.get_nnet_model(), env, clip_zero=True,
-                                                    gpu_num=gpu_num, batch_size=nnet_batch_size)
+    heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env)
 
-    while True:
-        batch_idx: int
-        states: List[State]
-        batch_idx, states = states_queue.get()
-        if batch_idx is None:
-            break
+    states: List[State]
+    states, _ = data_utils.load_states_from_files(num_states, data_files)
 
-        eps: List[float] = list(np.random.rand(len(states)) * eps_max)
+    start_idx: int = 0
+    while start_idx < num_states:
+        end_idx: int = min(start_idx + update_batch_size, num_states)
 
-        gbfs = GBFS(states, env, eps=eps)
+        states_itr = states[start_idx:end_idx]
+        eps: List[float] = list(np.random.rand(len(states_itr)) * eps_max)
+
+        gbfs = GBFS(states_itr, env, eps=eps)
         for _ in range(num_steps):
             gbfs.step(heuristic_fn)
 
         trajs: List[List[Tuple[State, float]]] = gbfs.get_trajs()
 
         trajs_flat: List[Tuple[State, float]]
-        trajs_flat, _ = misc_utils.flatten_list(trajs)
+        trajs_flat, _ = misc_utils.flatten(trajs)
 
         is_solved: np.ndarray = np.array(gbfs.get_is_solved())
 
@@ -44,100 +42,95 @@ def gbfs_runner(states_queue: Queue, all_zeros: bool, nnet_dir: str, device, on_
 
         cost_to_go_update = np.array(cost_to_go_update_l)
 
-        result_queue.put((batch_idx, states_update, cost_to_go_update, is_solved))
+        states_update_nnet: List[np.ndaray] = env.state_to_nnet_input(states_update)
+
+        result_queue.put((states_update_nnet, cost_to_go_update, is_solved))
+
+        start_idx: int = end_idx
+
+    result_queue.put(None)
 
 
 class GBFSUpdater:
-    def __init__(self, env: Environment, all_zeros: bool, num_procs: int, nnet_dir: str, device, on_gpu: bool,
-                 nnet_batch_size: int, num_steps: int, search_batch_size_max: int = 100, eps_max: float = 0.0):
+    def __init__(self, env: Environment, num_states: int, data_files: List[str], heur_fn_i_q, heur_fn_o_qs,
+                 num_steps: int, update_batch_size: int = 1000, eps_max: float = 0.0):
         super().__init__()
         ctx = get_context("spawn")
         self.num_steps = num_steps
-        self.search_batch_size_max = search_batch_size_max
+        num_procs = len(heur_fn_o_qs)
 
         # initialize queues
-        self.states_queue: ctx.Queue = ctx.Queue()
         self.result_queue: ctx.Queue = ctx.Queue()
 
+        # num states per process
+        num_states_per_proc: List[int] = [math.floor(num_states/num_procs) for _ in range(num_procs)]
+        num_states_per_proc[-1] += num_states % num_procs
+
+        self.num_batches: int = int(np.ceil(np.array(num_states_per_proc)/update_batch_size).sum())
+
         # initialize processes
-        self.num_procs = num_procs
         self.procs: List[ctx.Process] = []
-        gpu_nums: List[int] = nnet_utils.get_available_gpu_nums()
+        for proc_id in range(len(heur_fn_o_qs)):
+            num_states_proc: int = num_states_per_proc[proc_id]
+            if num_states_proc == 0:
+                continue
 
-        for proc_idx in range(num_procs):
-            if len(gpu_nums) > 0:
-                gpu_num_idx: int = proc_idx % len(gpu_nums)
-                gpu_num = gpu_nums[gpu_num_idx]
-            else:
-                gpu_num = -1
-
-            proc = ctx.Process(target=gbfs_runner, args=(self.states_queue, all_zeros, nnet_dir, device, on_gpu,
-                                                         gpu_num, nnet_batch_size, env, self.result_queue, num_steps,
-                                                         eps_max))
+            proc = ctx.Process(target=gbfs_runner, args=(num_states_proc, data_files, update_batch_size,
+                                                         heur_fn_i_q, heur_fn_o_qs[proc_id], proc_id, env,
+                                                         self.result_queue, num_steps, eps_max))
             proc.daemon = True
             proc.start()
             self.procs.append(proc)
 
-    def update(self, states: List[State], verbose: bool = False):
-        states_update: List[State]
+    def update(self):
+        states_update_nnet: List[np.ndarray]
         cost_to_go_update: np.ndarray
         is_solved: np.ndarray
-        states_update, cost_to_go_update, is_solved = self._update(states, verbose)
+        states_update_nnet, cost_to_go_update, is_solved = self._update()
 
         output_update = np.expand_dims(cost_to_go_update, 1)
 
-        return states_update, output_update, is_solved
+        return states_update_nnet, output_update, is_solved
 
-    def cleanup(self):
-        # join procs
-        for _ in self.procs:
-            self.states_queue.put((None, None))
-
-        for proc in self.procs:
-            proc.join()
-
-    def _update(self, states: List[State], verbose: bool) -> Tuple[List[State], np.ndarray, np.ndarray]:
-        # put inputs into runner queue
-        num_states: int = len(states)
-        num_batches = 0
-        start_idx: int = 0
-        search_batch_size: int = min(self.search_batch_size_max, int(np.ceil(num_states / self.num_procs)))
-
-        while start_idx < num_states:
-            end_idx: int = min(start_idx + search_batch_size, num_states)
-            states_batch: List[State] = states[start_idx:end_idx]
-            self.states_queue.put((num_batches, states_batch))
-
-            num_batches = num_batches + 1
-            start_idx: int = end_idx
-
-        # wait for results
-        results: List = [None] * num_batches
-
-        num_batches_finished: int = 0
-        progress_points: Set[int] = set(np.linspace(1, num_batches, 10, dtype=np.int))
-        for _ in range(num_batches):
-            result = self.result_queue.get()
-            results[result[0]] = result
-
-            num_batches_finished += 1
-
-            if (num_batches_finished in progress_points) and verbose:
-                print("%.2f%%..." % (100.0 * num_batches_finished / num_batches))
-        print("")
-
+    def _update(self) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray]:
         # process results
-        states_update: List[State] = []
+        states_update_nnet_l: List[List[np.ndarray]] = []
         cost_to_go_update_l: List = []
         is_solved_l: List = []
 
-        for result in results:
-            _, states_q, cost_to_go_q, is_solved_q = result
-            states_update.extend(states_q)
+        none_count: int = 0
+        result_count: int = 0
+        display_counts: List[int] = list(np.linspace(1, self.num_batches, 10, dtype=np.int))
+
+        start_time = time.time()
+
+        while none_count < len(self.procs):
+            result = self.result_queue.get()
+            if result is None:
+                none_count += 1
+                continue
+            result_count += 1
+
+            states_nnet_q: List[np.ndarray]
+            states_nnet_q, cost_to_go_q, is_solved_q = result
+            states_update_nnet_l.append(states_nnet_q)
+
             cost_to_go_update_l.append(cost_to_go_q)
             is_solved_l.append(is_solved_q)
+
+            if result_count in display_counts:
+                print("%.2f%% (Total time: %.2f)" % (100 * result_count/self.num_batches, time.time() - start_time))
+
+        num_states_nnet_np: int = len(states_update_nnet_l[0])
+        states_update_nnet: List[np.ndarray] = []
+        for np_idx in range(num_states_nnet_np):
+            states_nnet_idx: np.ndarray = np.concatenate([x[np_idx] for x in states_update_nnet_l], axis=0)
+            states_update_nnet.append(states_nnet_idx)
 
         cost_to_go_update: np.ndarray = np.concatenate(cost_to_go_update_l, axis=0)
         is_solved: np.ndarray = np.concatenate(is_solved_l, axis=0)
 
-        return states_update, cost_to_go_update, is_solved
+        for proc in self.procs:
+            proc.join()
+
+        return states_update_nnet, cost_to_go_update, is_solved

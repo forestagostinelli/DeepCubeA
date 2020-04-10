@@ -1,7 +1,6 @@
 from typing import List, Tuple, Set, Callable, Optional
 from environments.environment_abstract import Environment, State
 import numpy as np
-import time
 from utils import search_utils, env_utils, nnet_utils
 import glob
 import pickle
@@ -21,16 +20,12 @@ class Instance:
 
         self.eps = eps
 
-    def add_to_traj(self, state: State, cost_to_go: float, str_rep: str):
+    def add_to_traj(self, state: State, cost_to_go: float):
         self.trajs.append((state, cost_to_go))
-        self.seen_states.add(str_rep)
 
     def next_state(self, state: State):
         self.curr_state = state
         self.num_steps += 1
-
-    def seen_state(self, str_rep: str):
-        return str_rep in self.seen_states
 
 
 class GBFS:
@@ -84,10 +79,9 @@ class GBFS:
         if len(solved_idxs) > 0:
             instances_solved: List[Instance] = [instances[idx] for idx in solved_idxs]
             states_solved: List[State] = [instance.curr_state for instance in instances_solved]
-            str_reps: List[str] = self.env.get_str_rep(states_solved)
 
-            for instance, state, str_rep in zip(instances_solved, states_solved, str_reps):
-                instance.add_to_traj(state, 0.0, str_rep)
+            for instance, state in zip(instances_solved, states_solved):
+                instance.add_to_traj(state, 0.0)
                 instance.is_solved = True
 
     def _move(self, heuristic_fn: Callable) -> None:
@@ -101,31 +95,27 @@ class GBFS:
         ctg_backups: np.ndarray
         ctg_next_p_tcs: List[np.ndarray]
         states_exp: List[List[State]]
-        ctg_backups, ctg_next_p_tcs, state_exp = search_utils.bellman(states, heuristic_fn, self.env)
+        ctg_backups, ctg_next_p_tcs, states_exp = search_utils.bellman(states, heuristic_fn, self.env)
 
         # make move
-        str_reps: List[str] = self.env.get_str_rep(states)
         for idx in range(len(instances)):
             # add state to trajectory
             instance: Instance = instances[idx]
             state: State = states[idx]
             ctg_backup: float = ctg_backups[idx]
-            str_rep: str = str_reps[idx]
 
-            instance.add_to_traj(state, ctg_backup, str_rep)
+            instance.add_to_traj(state, ctg_backup)
 
             # get next state
             ctg_next_p_tc: np.ndarray = ctg_next_p_tcs[idx]
-            states_next: List[State] = state_exp[idx]
-            state_next: State = states_next[int(np.argmin(ctg_next_p_tc))]
+            state_exp: List[State] = states_exp[idx]
+            state_next: State = state_exp[int(np.argmin(ctg_next_p_tc))]
 
-            # if next state in trajectory or epsilon random, make random move
-            # str_rep_next: str = self.env.get_str_rep([state_next])[0]
-            # seen_state: bool = instance.seen_state(str_rep_next)
+            # make random move with probability eps
             eps_rand_move = np.random.random(1)[0] < instance.eps
             if eps_rand_move:
-                rand_state_idx = np.random.choice(len(states_next))
-                state_next = states_next[rand_state_idx]
+                rand_state_idx = np.random.choice(len(state_exp))
+                state_next = state_exp[rand_state_idx]
 
             instance.next_state(state_next)
 
@@ -139,35 +129,41 @@ def gbfs_test(data_dir: str, env: Environment, heuristic_fn: Callable, max_solve
 
     # load data
     states: List[State] = []
-    num_back_steps: List[int] = []
+    num_back_steps_l: List[int] = []
     for data_file in data_files:
         data = pickle.load(open(data_file, "rb"))
 
         states.extend(data['states'])
-        num_back_steps.extend(data['num_back_steps'])
+        num_back_steps_l.extend(data['num_back_steps'])
 
     if max_solve_steps is None:
-        max_solve_steps = max(max(num_back_steps), 1)
+        max_solve_steps = max(max(num_back_steps_l), 1)
+
+    num_back_steps: np.ndarray = np.array(num_back_steps_l)
 
     # Do GBFS for each back step
-    print("Solving states with GBFS with %i steps" % max_solve_steps)
-    for back_step_test in range(max(num_back_steps) + 1):
-        solve_start_time = time.time()
+    print("Solving %i states with GBFS with %i steps" % (len(states), max_solve_steps))
 
-        # Generate environments
-        states_back_step: List[State] = [state for state, back_step in zip(states, num_back_steps) if
-                                         back_step == back_step_test]
+    # Solve with GBFS
+    gbfs = GBFS(states, env, eps=None)
+    for _ in range(max_solve_steps):
+        gbfs.step(heuristic_fn)
 
-        # Get state cost-to-go
-        state_ctg: np.ndarray = heuristic_fn(states_back_step)
+    is_solved_all: np.ndarray = np.array(gbfs.get_is_solved())
+    num_steps_all: np.ndarray = np.array(gbfs.get_num_steps())
 
-        # Solve with GBFS
-        gbfs = GBFS(states_back_step, env, eps=None)
-        for _ in range(max_solve_steps):
-            gbfs.step(heuristic_fn)
+    # Get state cost-to-go
+    state_ctg_all: np.ndarray = heuristic_fn(states)
 
-        is_solved: np.ndarray = np.array(gbfs.get_is_solved())
-        num_steps: np.ndarray = np.array(gbfs.get_num_steps())
+    for back_step_test in range(max(num_back_steps_l) + 1):
+        # Get states
+        step_idxs = np.where(num_back_steps == back_step_test)[0]
+        if len(step_idxs) == 0:
+            continue
+
+        is_solved: np.ndarray = is_solved_all[step_idxs]
+        num_steps: np.ndarray = num_steps_all[step_idxs]
+        state_ctg: np.ndarray = state_ctg_all[step_idxs]
 
         # Get stats
         per_solved = 100 * float(sum(is_solved)) / float(len(is_solved))
@@ -175,14 +171,12 @@ def gbfs_test(data_dir: str, env: Environment, heuristic_fn: Callable, max_solve
         if per_solved > 0.0:
             avg_solve_steps = np.mean(num_steps[is_solved])
 
-        solve_elapsed_time = time.time() - solve_start_time
-
         # Print results
-        print("Back Steps: %i, %%Solved: %.2f, avgSolveSteps: %.2f, StateCTG Mean(Std/Min/Max): %.2f("
-              "%.2f/%.2f/%.2f), time: %.2f" % (
+        print("Back Steps: %i, %%Solved: %.2f, avgSolveSteps: %.2f, CTG Mean(Std/Min/Max): %.2f("
+              "%.2f/%.2f/%.2f)" % (
                   back_step_test, per_solved, avg_solve_steps, float(np.mean(state_ctg)),
                   float(np.std(state_ctg)), np.min(state_ctg),
-                  np.max(state_ctg), solve_elapsed_time))
+                  np.max(state_ctg)))
 
 
 def main():

@@ -2,31 +2,30 @@ from typing import List, Tuple, Dict, Callable, Optional, Any
 from environments.environment_abstract import Environment, State
 import numpy as np
 from heapq import heappush, heappop
+from subprocess import Popen, PIPE
 
 from argparse import ArgumentParser
 import torch
 from utils import env_utils, nnet_utils, search_utils, misc_utils
 import pickle
 import time
+import sys
+import os
+import socket
+from torch.multiprocessing import Process
 
 
 class Node:
-    __slots__ = ['state', 'path_cost', 'heuristic', 'cost', 'is_solved', 'parent_move', 'parent',
-                 'transition_costs', 'children', 'backup', 'hash_rep']
+    __slots__ = ['state', 'path_cost', 'cost', 'is_solved', 'parent_move', 'parent']
 
-    def __init__(self, state: State, path_cost: float, heuristic: float, cost: float, is_solved: bool,
-                 parent_move: Optional[int], parent, hash_rep: str):
+    def __init__(self, state: State, path_cost: float, cost: float, is_solved: bool,
+                 parent_move: Optional[int], parent):
         self.state: State = state
         self.path_cost: float = path_cost
-        self.heuristic: float = heuristic
         self.cost: float = cost
         self.is_solved: bool = is_solved
         self.parent_move: Optional[int] = parent_move
         self.parent: Optional[Node] = parent
-        self.transition_costs: List[float] = []
-        self.children: List[Node] = []
-        self.backup: float = np.inf
-        self.hash_rep: str = hash_rep
 
 
 OpenSetElem = Tuple[float, int, Node]
@@ -34,22 +33,23 @@ OpenSetElem = Tuple[float, int, Node]
 
 class Instance:
 
-    def __init__(self, state: State, heuristic: float, cost: float, is_solved, str_rep: str):
+    def __init__(self, state: State, cost: float, is_solved):
         self.open_set: List[OpenSetElem] = []
         self.heappush_count: int = 0
-        self.closed_dict: Dict[str, Node] = dict()
+        self.closed_dict: Dict[State, float] = dict()
         self.popped_nodes: List[Node] = []
         self.goal_nodes: List[Node] = []
         self.num_nodes_generated: int = 0
 
-        self.root_node: Node = Node(state, 0.0, heuristic, cost, is_solved, None, None, str_rep)
+        self.root_node: Node = Node(state, 0.0, cost, is_solved, None, None)
 
-        self.push_to_open(self.root_node)
+        self.push_to_open([self.root_node])
 
-    def push_to_open(self, node: Node):
-        heappush(self.open_set, (node.cost, self.heappush_count, node))
-        self.heappush_count += 1
-        self.closed_dict[node.hash_rep] = node
+    def push_to_open(self, nodes: List[Node]):
+        for node in nodes:
+            heappush(self.open_set, (node.cost, self.heappush_count, node))
+            self.heappush_count += 1
+            self.closed_dict[node.state] = node.path_cost
 
     def pop_from_open(self, num_nodes: int) -> List[Node]:
         num_to_pop: int = min(num_nodes, len(self.open_set))
@@ -64,10 +64,10 @@ class Instance:
         nodes_not_in_closed: List[Node] = []
 
         for node in nodes:
-            node_get: Optional[Node] = self.closed_dict.get(node.hash_rep)
-            if node_get is None:
+            path_cost_prev: Optional[float] = self.closed_dict.get(node.state)
+            if path_cost_prev is None:
                 nodes_not_in_closed.append(node)
-            elif node_get.path_cost > node.path_cost:
+            elif path_cost_prev > node.path_cost:
                 nodes_not_in_closed.append(node)
 
         return nodes_not_in_closed
@@ -79,12 +79,11 @@ def pop_from_open(instances: List[Instance], batch_size: int) -> List[List[Node]
     return popped_nodes_all
 
 
-def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]],
-                 env: Environment) -> List[List[Node]]:
+def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]], env: Environment):
     # Get children of all nodes at once (for speed)
     popped_nodes_flat: List[Node]
     split_idxs: List[int]
-    popped_nodes_flat, split_idxs = misc_utils.flatten_list(popped_nodes_all)
+    popped_nodes_flat, split_idxs = misc_utils.flatten(popped_nodes_all)
 
     if len(popped_nodes_flat) == 0:
         return [[]]
@@ -93,28 +92,29 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]],
 
     states_c_by_node: List[List[State]]
     tcs_np: List[np.ndarray]
+
     states_c_by_node, tcs_np = env.expand(states)
+
     tcs_by_node: List[List[float]] = [list(x) for x in tcs_np]
 
     # Get is_solved on all states at once (for speed)
     states_c: List[State]
-    states_c, split_idxs_c = misc_utils.flatten_list(states_c_by_node)
+
+    states_c, split_idxs_c = misc_utils.flatten(states_c_by_node)
     is_solved_c: List[bool] = list(env.is_solved(states_c))
-    is_solved_c_by_node: List[List[bool]] = misc_utils.flat_to_list_of_lists(is_solved_c, split_idxs_c)
+    is_solved_c_by_node: List[List[bool]] = misc_utils.unflatten(is_solved_c, split_idxs_c)
 
     # Update path costs for all states at once (for speed)
     parent_path_costs = np.expand_dims(np.array([node.path_cost for node in popped_nodes_flat]), 1)
     path_costs_c: List[float] = (parent_path_costs + np.array(tcs_by_node)).flatten().tolist()
-    for node, tcs_c in zip(popped_nodes_flat, tcs_by_node):
-        node.transition_costs.extend(tcs_c)
 
-    path_costs_c_by_node: List[List[float]] = misc_utils.flat_to_list_of_lists(path_costs_c, split_idxs_c)
+    path_costs_c_by_node: List[List[float]] = misc_utils.unflatten(path_costs_c, split_idxs_c)
 
     # Reshape lists
-    patch_costs_c_by_inst_node: List[List[List[float]]] = misc_utils.flat_to_list_of_lists(path_costs_c_by_node,
-                                                                                           split_idxs)
-    states_c_by_inst_node: List[List[List[State]]] = misc_utils.flat_to_list_of_lists(states_c_by_node, split_idxs)
-    is_solved_c_by_inst_node: List[List[List[bool]]] = misc_utils.flat_to_list_of_lists(is_solved_c_by_node, split_idxs)
+    patch_costs_c_by_inst_node: List[List[List[float]]] = misc_utils.unflatten(path_costs_c_by_node,
+                                                                               split_idxs)
+    states_c_by_inst_node: List[List[List[State]]] = misc_utils.unflatten(states_c_by_node, split_idxs)
+    is_solved_c_by_inst_node: List[List[List[bool]]] = misc_utils.unflatten(is_solved_c_by_node, split_idxs)
 
     # Get child nodes
     instance: Instance
@@ -124,25 +124,22 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]],
         parent_nodes: List[Node] = popped_nodes_all[inst_idx]
         path_costs_c_by_node: List[List[float]] = patch_costs_c_by_inst_node[inst_idx]
         states_c_by_node: List[List[State]] = states_c_by_inst_node[inst_idx]
+
         is_solved_c_by_node: List[List[bool]] = is_solved_c_by_inst_node[inst_idx]
 
         parent_node: Node
         tcs_node: List[float]
         states_c: List[State]
+        str_reps_c: List[str]
         for parent_node, path_costs_c, states_c, is_solved_c in zip(parent_nodes, path_costs_c_by_node,
                                                                     states_c_by_node, is_solved_c_by_node):
-            str_reps: List[str] = env.get_str_rep(states_c)
-
             state: State
             for move_idx, state in enumerate(states_c):
                 path_cost: float = path_costs_c[move_idx]
                 is_solved: bool = is_solved_c[move_idx]
-                str_rep: str = str_reps[move_idx]
-                node_c: Node = Node(state, path_cost, 0.0, 0.0, is_solved, move_idx, parent_node, str_rep)
+                node_c: Node = Node(state, path_cost, 0.0, is_solved, move_idx, parent_node)
 
                 nodes_c_by_inst[inst_idx].append(node_c)
-
-                parent_node.children.append(node_c)
 
         instance.num_nodes_generated += len(nodes_c_by_inst[inst_idx])
 
@@ -156,13 +153,14 @@ def remove_in_closed(instances: List[Instance], nodes_c_all: List[List[Node]]) -
     return nodes_c_all
 
 
-def add_heuristic_and_cost(nodes: List[List[Node]], heuristic_fn: Callable, weight: float) -> None:
+def add_heuristic_and_cost(nodes: List[List[Node]], heuristic_fn: Callable,
+                           weight: float) -> Tuple[np.ndarray, np.ndarray]:
     # flatten nodes
     nodes_flat: List[Node]
-    nodes_flat, _ = misc_utils.flatten_list(nodes)
+    nodes_flat, _ = misc_utils.flatten(nodes)
 
     if len(nodes_flat) == 0:
-        return
+        return np.zeros(0), np.zeros(0)
 
     # get heuristic
     states_flat: List[State] = [node.state for node in nodes_flat]
@@ -174,19 +172,18 @@ def add_heuristic_and_cost(nodes: List[List[Node]], heuristic_fn: Callable, weig
 
     costs_flat: np.ndarray = weight * path_costs_flat + heuristics_flat * np.logical_not(is_solved_flat)
 
-    # add heuristic and cost to node
-    for node, heuristic, cost in zip(nodes_flat, heuristics_flat, costs_flat):
-        node.heuristic = heuristic
+    # add cost to node
+    for node, cost in zip(nodes_flat, costs_flat):
         node.cost = cost
+
+    return path_costs_flat, heuristics_flat
 
 
 def add_to_open(instances: List[Instance], nodes: List[List[Node]]) -> None:
     nodes_inst: List[Node]
     instance: Instance
     for instance, nodes_inst in zip(instances, nodes):
-        node: Node
-        for node in nodes_inst:
-            instance.push_to_open(node)
+        instance.push_to_open(nodes_inst)
 
 
 def get_path(node: Node) -> Tuple[List[State], List[int], float]:
@@ -221,16 +218,14 @@ class AStar:
         # compute starting costs
         heuristics: np.ndarray = heuristic_fn(states)
         is_solved_states: np.ndarray = self.env.is_solved(states)
-        costs: np.ndarray = heuristics*np.logical_not(is_solved_states)
+        costs: np.ndarray = heuristics * np.logical_not(is_solved_states)
 
         # initialize instances
         self.instances: List[Instance] = []
 
-        str_reps: List[str] = self.env.get_str_rep(states)
         state: State
-        for state, heuristic, cost, is_solved_state, str_rep in zip(states, heuristics, costs, is_solved_states,
-                                                                    str_reps):
-            self.instances.append(Instance(state, heuristic, cost, is_solved_state, str_rep))
+        for state, cost, is_solved_state in zip(states, costs, is_solved_states):
+            self.instances.append(Instance(state, cost, is_solved_state))
 
     def step(self, heuristic_fn: Callable, batch_size: int, include_solved: bool = False, verbose: bool = False):
         start_time_itr = time.time()
@@ -250,15 +245,15 @@ class AStar:
         nodes_c_all: List[List[Node]] = expand_nodes(instances, popped_nodes_all, self.env)
         expand_time = time.time() - start_time
 
-        # Get heuristic of children
-        start_time = time.time()
-        add_heuristic_and_cost(nodes_c_all, heuristic_fn, self.weight)
-        heur_time = time.time() - start_time
-
         # Check if children are in closed
         start_time = time.time()
         nodes_c_all = remove_in_closed(instances, nodes_c_all)
         check_time = time.time() - start_time
+
+        # Get heuristic of children
+        start_time = time.time()
+        path_costs, heuristics = add_heuristic_and_cost(nodes_c_all, heuristic_fn, self.weight)
+        heur_time = time.time() - start_time
 
         # Add to open
         start_time = time.time()
@@ -266,17 +261,28 @@ class AStar:
         add_time = time.time() - start_time
 
         itr_time = time.time() - start_time_itr
+
         # Print to screen
         if verbose:
-            print("Itr: %i, Times - pop: %.2f, expand: %.2f, heur: %.2f, check: %.2f, "
-                  "add: %.2f, itr: %.2f" % (self.step_num, pop_time, expand_time, heur_time, check_time, add_time,
-                                            itr_time))
+            if heuristics.shape[0] > 0:
+                min_heur = np.min(heuristics)
+                min_heur_pc = path_costs[np.argmin(heuristics)]
+                max_heur = np.max(heuristics)
+                max_heur_pc = path_costs[np.argmax(heuristics)]
+
+                print("Itr: %i, Added to OPEN - Min/Max Heur(PathCost): "
+                      "%.2f(%.2f)/%.2f(%.2f) " % (self.step_num, min_heur, min_heur_pc, max_heur, max_heur_pc))
+
+            print("Times - pop: %.2f, expand: %.2f, check: %.2f, heur: %.2f, "
+                  "add: %.2f, itr: %.2f" % (pop_time, expand_time, check_time, heur_time, add_time, itr_time))
+
+            print("")
 
         # Update timings
         self.timings['pop'] += pop_time
         self.timings['expand'] += expand_time
-        self.timings['heur'] += heur_time
         self.timings['check'] += check_time
+        self.timings['heur'] += heur_time
         self.timings['add'] += add_time
         self.timings['itr'] += itr_time
 
@@ -314,29 +320,47 @@ def main():
     parser.add_argument('--env', type=str, required=True, help="Environment: cube3, 15-puzzle, 24-puzzle")
     parser.add_argument('--batch_size', type=int, default=1, help="Batch size for BWAS")
     parser.add_argument('--weight', type=float, default=1.0, help="Weight of path cost")
-    parser.add_argument('--inadmiss_tol', type=float, default=0.0, help="How much larger the cost of the computer path "
-                                                                        "can be than cost of an optimal path")
+    parser.add_argument('--language', type=str, default="python", help="python or cpp")
+
     parser.add_argument('--results_file', type=str, required=True, help="File to save results")
     parser.add_argument('--start_idx', type=int, default=0, help="")
+    parser.add_argument('--nnet_batch_size', type=int, default=None, help="Set to control how many states per GPU are "
+                                                                          "evaluated by the neural network at a time. "
+                                                                          "Does not affect final results, "
+                                                                          "but will help if nnet is running out of "
+                                                                          "memory.")
+
     parser.add_argument('--verbose', action='store_true', default=False, help="Set for verbose")
 
     args = parser.parse_args()
-
-    # environment
-    env: Environment = env_utils.get_environment(args.env)
 
     # get data
     input_data = pickle.load(open(args.states, "rb"))
     states: List[State] = input_data['states'][args.start_idx:]
 
+    # environment
+    env: Environment = env_utils.get_environment(args.env)
+
     # initialize results
     results: Dict[str, Any] = dict()
     results["states"] = states
-    results["solutions"] = []
-    results["paths"] = []
-    results["times"] = []
-    results["num_nodes_generated"] = []
 
+    if args.language == "python":
+        solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
+    elif args.language == "cpp":
+        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states)
+    else:
+        raise ValueError("Unknown language %s" % args.language)
+
+    results["solutions"] = solns
+    results["paths"] = paths
+    results["times"] = times
+    results["num_nodes_generated"] = num_nodes_gen
+
+    pickle.dump(results, open(args.results_file, "wb"), protocol=-1)
+
+
+def bwas_python(args, env: Environment, states: List[State]):
     # get device
     on_gpu: bool
     device: torch.device
@@ -345,7 +369,12 @@ def main():
     print("device: %s, devices: %s, on_gpu: %s" % (device, devices, on_gpu))
 
     heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
-                                                env, clip_zero=True)
+                                                env, clip_zero=True, batch_size=args.nnet_batch_size)
+
+    solns: List[List[int]] = []
+    paths: List[List[State]] = []
+    times: List = []
+    num_nodes_gen: List[int] = []
 
     for state_idx, state in enumerate(states):
         start_time = time.time()
@@ -359,19 +388,19 @@ def main():
         path: List[State]
         soln: List[int]
         path_cost: float
-        num_nodes_generated: int
+        num_nodes_gen_idx: int
         goal_node: Node = astar.get_goal_node_smallest_path_cost(0)
         path, soln, path_cost = get_path(goal_node)
 
-        num_nodes_generated: int = astar.get_num_nodes_generated(0)
+        num_nodes_gen_idx: int = astar.get_num_nodes_generated(0)
 
         solve_time = time.time() - start_time
 
         # record solution information
-        results["solutions"].append(soln)
-        results["paths"].append(path)
-        results["times"].append(solve_time)
-        # results["num_nodes_generated"].append(num_nodes_generated)
+        solns.append(soln)
+        paths.append(path)
+        times.append(solve_time)
+        num_nodes_gen.append(num_nodes_gen_idx)
 
         # check soln
         assert search_utils.is_valid_soln(state, soln, env)
@@ -382,8 +411,186 @@ def main():
 
         print("State: %i, SolnCost: %.2f, # Moves: %i, "
               "# Nodes Gen: %s, Time: %.2f" % (state_idx, path_cost, len(soln),
-                                               format(num_nodes_generated, ","),
+                                               format(num_nodes_gen_idx, ","),
                                                solve_time))
+
+    return solns, paths, times, num_nodes_gen
+
+
+def bwas_cpp(args, env: Environment, states: List[State]):
+    assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35',
+                                 'PUZZLE48']) or ('LIGHTSOUT' in args.env.upper())
+
+    # Make c++ socket
+    socket_name: str = "%s_cpp_socket" % args.results_file.split(".")[0]
+
+    try:
+        os.unlink(socket_name)
+    except OSError:
+        if os.path.exists(socket_name):
+            raise
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(socket_name)
+
+    # Get state dimension
+    if args.env.upper() == 'CUBE3':
+        state_dim: int = 54
+    elif args.env.upper() == 'PUZZLE15':
+        state_dim: int = 16
+    elif args.env.upper() == 'PUZZLE24':
+        state_dim: int = 25
+    else:
+        raise ValueError("Unknown c++ environment: %s" % args.env)
+
+    # start heuristic proc
+    num_parallel: int = len(os.environ['CUDA_VISIBLE_DEVICES'].split(","))
+    device, devices, on_gpu = nnet_utils.get_device()
+    heur_fn_i_q, heur_fn_o_qs, heur_procs = nnet_utils.start_heur_fn_runners(num_parallel, args.model_dir, device,
+                                                                             on_gpu, env, all_zeros=False,
+                                                                             clip_zero=True,
+                                                                             batch_size=args.nnet_batch_size)
+    nnet_utils.heuristic_fn_par(states, env, heur_fn_i_q, heur_fn_o_qs)  # initialize
+
+    heur_proc = Process(target=cpp_listener, args=(sock, args, env, state_dim, heur_fn_i_q, heur_fn_o_qs))
+    heur_proc.daemon = True
+    heur_proc.start()
+
+    solns: List[List[int]] = []
+    paths: List[List[State]] = []
+    times: List = []
+    num_nodes_gen: List[int] = []
+
+    for state_idx, state in enumerate(states):
+        # Get string rep of state
+        if args.env.upper() == 'CUBE3':
+            state_str: str = " ".join([str(x) for x in state.colors])
+        elif args.env.upper() == 'PUZZLE15':
+            state_str: str = " ".join([str(x) for x in state.tiles])
+        elif args.env.upper() == 'PUZZLE24':
+            state_str: str = " ".join([str(x) for x in state.tiles])
+        else:
+            raise ValueError("Unknown c++ environment: %s" % args.env)
+
+        popen = Popen(['./cpp/parallel_weighted_astar', state_str, str(args.weight), str(args.batch_size),
+                       socket_name, args.env, "0"], stdout=PIPE, stderr=PIPE, bufsize=1, universal_newlines=True)
+        lines = []
+        for stdout_line in iter(popen.stdout.readline, ""):
+            stdout_line = stdout_line.strip('\n')
+            lines.append(stdout_line)
+            if args.verbose:
+                sys.stdout.write("%s\n" % stdout_line)
+                sys.stdout.flush()
+
+        moves = [int(x) for x in lines[-5].split(" ")[:-1]]
+        soln = [x for x in moves][::-1]
+        num_nodes_gen_idx = int(lines[-3])
+        solve_time = float(lines[-1])
+
+        # record solution information
+        path: List[State] = [state]
+        next_state: State = state
+        transition_costs: List[float] = []
+
+        for move in soln:
+            next_states, tcs = env.next_state([next_state], move)
+
+            next_state = next_states[0]
+            tc = tcs[0]
+
+            path.append(next_state)
+            transition_costs.append(tc)
+
+        solns.append(soln)
+        paths.append(path)
+        times.append(solve_time)
+        num_nodes_gen.append(num_nodes_gen_idx)
+
+        path_cost: float = sum(transition_costs)
+
+        # check soln
+        assert search_utils.is_valid_soln(state, soln, env)
+
+        # print to screen
+        print("State: %i, SolnCost: %.2f, # Moves: %i, "
+              "# Nodes Gen: %s, Time: %.2f" % (state_idx, path_cost, len(soln),
+                                               format(num_nodes_gen_idx, ","),
+                                               solve_time))
+
+    os.unlink(socket_name)
+
+    nnet_utils.stop_heuristic_fn_runners(heur_procs, heur_fn_i_q)
+
+    return solns, paths, times, num_nodes_gen
+
+
+def cpp_listener(sock, args, env: Environment, state_dim: int, heur_fn_i_q, heur_fn_o_qs):
+    sock.listen(1)
+    connection, client_address = sock.accept()
+
+    # device, devices, on_gpu = nnet_utils.get_device()
+    # heuristic_fn = nnet_utils.load_heuristic_fn(args.model_dir, device, on_gpu, env.get_nnet_model(),
+    #                                             env, clip_zero=True, batch_size=args.nnet_batch_size)
+
+    max_bytes: int = 4096
+    while True:
+        data_rec = connection.recv(8)
+        while not data_rec:
+            connection, client_address = sock.accept()
+            data_rec = connection.recv(8)
+
+        num_bytes_recv = np.frombuffer(data_rec, dtype=np.int64)[0]
+
+        num_bytes_seen = 0
+        data_rec = b""
+        while num_bytes_seen < num_bytes_recv:
+            con_rec = connection.recv(max_bytes)
+            data_rec = data_rec + con_rec
+            num_bytes_seen = num_bytes_seen + len(con_rec)
+
+        states_np = np.frombuffer(data_rec, dtype=env.dtype)
+        states_np = states_np.reshape(int(len(states_np)/state_dim), state_dim)
+
+        # Get nnet representation of state
+        if args.env.upper() == "CUBE3":
+            states_np = states_np/9
+            states_np = states_np.astype(env.dtype)
+            states_nnet: List[np.ndarray] = [states_np]
+        elif args.env.upper() == "PUZZLE15":
+            states_np = states_np.astype(env.dtype)
+            states_nnet: List[np.ndarray] = [states_np]
+        elif args.env.upper() == "PUZZLE24":
+            states_np = states_np.astype(env.dtype)
+            states_nnet: List[np.ndarray] = [states_np]
+        else:
+            raise ValueError("Unknown c++ environment %s" % args.env)
+
+        # get heuristic
+        results = heuristic_fn_par(states_nnet, heur_fn_i_q, heur_fn_o_qs)
+
+        # send results
+        connection.sendall(results.astype(np.float32))
+
+
+def heuristic_fn_par(states_nnet: List[np.ndarray], heur_fn_i_q, heur_fn_o_qs):
+    num_parallel: int = len(heur_fn_o_qs)
+
+    num_states: int = states_nnet[0].shape[0]
+
+    parallel_nums = range(min(num_parallel, num_states))
+    split_idxs = np.array_split(np.arange(num_states), len(parallel_nums))
+    for idx in parallel_nums:
+        states_nnet_idx = [x[split_idxs[idx]] for x in states_nnet]
+        heur_fn_i_q.put((idx, states_nnet_idx))
+
+    # Check until all data is obtaied
+    results = [None]*len(parallel_nums)
+    for idx in parallel_nums:
+        results[idx] = heur_fn_o_qs[idx].get()
+
+    results = np.concatenate(results, axis=0)
+
+    return results
 
 
 if __name__ == "__main__":

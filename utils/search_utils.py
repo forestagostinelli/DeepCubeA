@@ -19,7 +19,7 @@ def bellman(states: List, heuristic_fn, env: Environment) -> Tuple[np.ndarray, L
     tc = np.concatenate(tc_l, axis=0)
 
     # get cost-to-go of expanded states
-    states_exp_flat, split_idxs = misc_utils.flatten_list(states_exp)
+    states_exp_flat, split_idxs = misc_utils.flatten(states_exp)
     ctg_next: np.ndarray = heuristic_fn(states_exp_flat)
 
     # backup cost-to-go
