@@ -11,6 +11,16 @@ class Cube3State(State):
 
     def __init__(self, colors: np.ndarray):
         self.colors: np.ndarray = colors
+        self.hash = None
+
+    def __hash__(self):
+        if self.hash is None:
+            self.hash = hash(self.colors.tostring())
+
+        return self.hash
+
+    def __eq__(self, other):
+        return np.array_equal(self.colors, other.colors)
 
 
 class Cube3(Environment):
@@ -63,29 +73,24 @@ class Cube3(Environment):
 
         return np.all(is_equal, axis=1)
 
-    def state_to_nnet_input(self, states: List[Cube3State]) -> List[List[np.ndarray]]:
+    def state_to_nnet_input(self, states: List[Cube3State]) -> List[np.ndarray]:
         states_np = np.stack([state.colors for state in states], axis=0)
 
         representation_np: np.ndarray = states_np / (self.cube_len ** 2)
         representation_np: np.ndarray = representation_np.astype(self.dtype)
 
-        representation: List[List[np.ndarray]] = [[x] for x in representation_np]
+        representation: List[np.ndarray] = [representation_np]
 
         return representation
 
-    def get_moves(self) -> List[str]:
-        return list(range(len(self.moves)))
+    def get_num_moves(self) -> int:
+        return len(self.moves)
 
     def get_nnet_model(self) -> nn.Module:
         state_dim: int = (self.cube_len ** 2) * 6
         nnet = ResnetModel(state_dim, 6, 5000, 1000, 4, 1)
 
         return nnet
-
-    def get_str_rep(self, states: List[Cube3State]) -> List[str]:
-        state_strs: List[str] = [str(state.colors.tostring()) for state in states]
-
-        return state_strs
 
     def _get_adj(self) -> None:
         # WHITE:0, YELLOW:1, BLUE:2, GREEN:3, ORANGE: 4, RED: 5

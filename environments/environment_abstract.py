@@ -1,12 +1,18 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from typing import List, Tuple
-from random import choice
+from random import randrange
 import torch.nn as nn
 
 
 class State(ABC):
-    pass
+    @abstractmethod
+    def __hash__(self):
+        pass
+
+    @abstractmethod
+    def __eq__(self, other):
+        pass
 
 
 class Environment(ABC):
@@ -54,16 +60,17 @@ class Environment(ABC):
         pass
 
     @abstractmethod
-    def state_to_nnet_input(self, states: List[State]) -> List[List[np.ndarray]]:
+    def state_to_nnet_input(self, states: List[State]) -> List[np.ndarray]:
         """ State to numpy arrays to be fed to the neural network
 
         @param states: List of states
-        @return: List of Lists of numpy arrays. Each state corresponds to a list of numpy arrays
+        @return: List of numpy arrays. Each index along the first dimension of each array corresponds to the index of
+        a state.
         """
         pass
 
     @abstractmethod
-    def get_moves(self) -> List[int]:
+    def get_num_moves(self) -> int:
         """ Used for environments with fixed actions. Corresponds to the numbers of each action
 
         @return: List of action ints
@@ -78,16 +85,7 @@ class Environment(ABC):
         """
         pass
 
-    @abstractmethod
-    def get_str_rep(self, state: List[State]) -> List[str]:
-        """ Get the unique string representation for the state. Used in A* search to uniquely identify states
-
-        @param state: List of states
-        @return: List of string representations
-        """
-        pass
-
-    def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> List[State]:
+    def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[State], List[int]]:
         """ Generate training states by starting from the goal and taking actions in reverse.
         If the number of actions are not fixed, then a custom implementation must be used.
 
@@ -101,30 +99,30 @@ class Environment(ABC):
 
         # Initialize
         scrambs: List[int] = list(range(backwards_range[0], backwards_range[1] + 1))
-        legal_moves: List[int] = self.get_moves()
+        num_env_moves: int = self.get_num_moves()
 
         # Get goal states
         states: List[State] = self.generate_goal_states(num_states)
 
-        scramble_nums: np.ndarray = np.random.choice(scrambs, num_states)
-        num_moves: np.ndarray = np.zeros(num_states)
+        scramble_nums: np.array = np.random.choice(scrambs, num_states)
+        num_back_moves: np.array = np.zeros(num_states)
 
         # Go backward from goal state
-        while np.max(num_moves < scramble_nums):
-            idxs: np.ndarray = np.where((num_moves < scramble_nums))[0]
-            subset_size: int = int(max(len(idxs) / len(legal_moves), 1))
+        while np.max(num_back_moves < scramble_nums):
+            idxs: np.ndarray = np.where((num_back_moves < scramble_nums))[0]
+            subset_size: int = int(max(len(idxs) / num_env_moves, 1))
             idxs: np.ndarray = np.random.choice(idxs, subset_size)
 
-            move: int = choice(legal_moves)
+            move: int = randrange(num_env_moves)
             states_to_move = [states[i] for i in idxs]
             states_moved = self.prev_state(states_to_move, move)
 
             for state_moved_idx, state_moved in enumerate(states_moved):
                 states[idxs[state_moved_idx]] = state_moved
 
-            num_moves[idxs] = num_moves[idxs] + 1
+            num_back_moves[idxs] = num_back_moves[idxs] + 1
 
-        return states
+        return states, scramble_nums.tolist()
 
     def expand(self, states: List[State]) -> Tuple[List[List[State]], List[np.ndarray]]:
         """ Generate all children for the state
@@ -136,22 +134,22 @@ class Environment(ABC):
 
         # initialize
         num_states: int = len(states)
-        legal_moves: List[int] = self.get_moves()
+        num_env_moves: int = self.get_num_moves()
 
         states_exp: List[List[State]] = []
         for _ in range(len(states)):
             states_exp.append([])
 
-        tc: np.ndarray = np.empty([num_states, len(legal_moves)])
+        tc: np.ndarray = np.empty([num_states, num_env_moves])
 
         # for each move, get next states, transition costs, and if solved
         move_idx: int
         move: int
-        for move_idx, move in enumerate(legal_moves):
+        for move_idx in range(num_env_moves):
             # next state
             states_next_move: List[State]
             tc_move: List[float]
-            states_next_move, tc_move = self.next_state(states, move)
+            states_next_move, tc_move = self.next_state(states, move_idx)
 
             # transition cost
             tc[:, move_idx] = np.array(tc_move)

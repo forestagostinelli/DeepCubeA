@@ -5,7 +5,6 @@ from argparse import ArgumentParser
 import pickle
 import os
 import time
-import math
 
 from multiprocessing import Queue, Process
 
@@ -19,22 +18,9 @@ def generate_and_save_states(env: Environment, num_states: int, back_max: int, f
         start_time = time.time()
 
         print("Generating data for %s" % filepath)
-
-        # get number of states per backward steps
-        assert num_states >= back_max
-        states: List[State] = []
-        num_back_steps: List[int] = []
-
-        back_step_nums: List[int] = list(range(0, back_max + 1))
-        num_states_per_back_step: List[int] = [math.floor(num_states/(back_max + 1)) for _ in back_step_nums]
-        num_states_per_back_step[-1] += num_states % (back_max + 1)
-
-        # generate states for each number of backward steps
-        for num_states_back_step, back_step in zip(num_states_per_back_step, back_step_nums):
-            states_gen: List[State] = env.generate_states(num_states_back_step, (back_step, back_step))
-
-            states.extend(states_gen)
-            num_back_steps.extend([back_step]*len(states_gen))
+        states: List[State]
+        num_back_steps: List[int]
+        states, num_back_steps = env.generate_states(num_states, (0, back_max))
 
         # save data
         data = dict()
@@ -67,7 +53,7 @@ def main():
                                                "number of backwards steps"
 
     if not os.path.exists(args.data_dir):
-        os.mkdir(args.data_dir)
+        os.makedirs(args.data_dir)
 
     # make filepath queues
     filepath_queue = Queue()
