@@ -14,12 +14,14 @@ Python version used: 3.7.2
 
 IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current directory to your python path.
 
-# Sample script
+# Training and A* Search
 `train.sh` contains the commands to trian the cost-to-go function as well as using it with A* search.
 
 There are pre-trained models in the `saved_models/` directory as well as `output.txt` files to let you know what output to expect.
 
 These models were trained with 1-4 GPUs and 20-30 CPUs. This varies throughout training as the training is often stopped and started again to make room for other processes.
+
+There are pre-computed results in the `results/` as well as `output.txt` files. 
 
 ### Commands to train DeepCubeA to solve the 15-puzzle.
 ###### Train cost-to-go function
@@ -27,6 +29,9 @@ python ctg_approx/avi.py --env puzzle15 --states_per_update 50000000 --batch_siz
 
 ###### Solve with A* search, use --verbose for more information
 python search_methods/astar.py --states data/puzzle15/test/data_0.pkl --model saved_models/puzzle15/current/ --env puzzle15 --weight 0.8 --batch_size 20000 --results_dir results/puzzle15/ --language cpp --nnet_batch_size 10000
+
+###### Compare to shortest path
+python scripts/compare_solutions.py --soln1 data/puzzle15/test/data_0.pkl --soln2 results/puzzle15/results.pkl
 
 ### Improving Results
 During approximate value iteration (AVI), one can get better results by increasing the batch size (`--batch_size`) and number of states per update (`--states_per_update`).
