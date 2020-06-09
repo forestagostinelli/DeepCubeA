@@ -1,5 +1,6 @@
 from typing import List, Tuple, Any
 import numpy as np
+import math
 
 
 def flatten(data: List[List[Any]]) -> Tuple[List[Any], List[int]]:
@@ -24,3 +25,12 @@ def unflatten(data: List[Any], split_idxs: List[int]) -> List[List[Any]]:
     data_split.append(data[start_idx:])
 
     return data_split
+
+
+def split_evenly(num_total: int, num_splits: int) -> List[int]:
+    num_per: List[int] = [math.floor(num_total / num_splits) for _ in range(num_splits)]
+    left_over: int = num_total % num_splits
+    for idx in range(left_over):
+        num_per[idx] += 1
+
+    return num_per
