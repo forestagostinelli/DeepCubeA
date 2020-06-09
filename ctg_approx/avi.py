@@ -15,7 +15,7 @@ import numpy as np
 import time
 
 import sys
-import glob
+import shutil
 
 
 def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
@@ -40,9 +40,11 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
 
     # Update
     parser.add_argument('--loss_thresh', type=float, default=0.05, help="When the loss falls below this value, "
-                                                                        "the target network is updated.")
+                                                                        "the target network is updated to the current "
+                                                                        "network.")
     parser.add_argument('--states_per_update', type=int, default=1000, help="How many states to train on before "
-                                                                            "checking for update")
+                                                                            "checking if target network should be "
+                                                                            "updated")
     parser.add_argument('--epochs_per_update', type=int, default=1, help="How many epochs to train for. "
                                                                          "Making this greater than 1 could increase "
                                                                          "risk of overfitting, however, one can train "
@@ -68,13 +70,15 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
                                                                              "can make the cost-to-go function more "
                                                                              "robust by exploring more of the "
                                                                              "state space.")
+
+    parser.add_argument('--eps_max', type=float, default=0, help="When addings training states with GBFS, each "
+                                                                 "instance will have an eps that is distributed "
+                                                                 "randomly between 0 and epx_max.")
     # Testing
-    parser.add_argument('--testing_freq', type=int, default=1, help="How frequently (i.e. after how many updates)"
-                                                                    " to test with GBFS.")
+    parser.add_argument('--num_test', type=int, default=10000, help="Number of test states.")
 
     # data
-    parser.add_argument('--train_dir', type=str, required=True, help="Directory of training data")
-    parser.add_argument('--val_dir', type=str, required=True, help="Directory of validation data")
+    parser.add_argument('--back_max', type=int, required=True, help="Maximum number of backwards steps from goal")
 
     # model
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
@@ -87,16 +91,21 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     args_dict: Dict[str, Any] = vars(args)
 
     # make save directory
-    args_dict['model_dir'] = "%s/%s/" % (args_dict['save_dir'], args_dict['nnet_name'])
-    model_save_loc = "%s/%s" % (args_dict['model_dir'], args_dict['update_num'])
-    if not os.path.exists(model_save_loc):
-        os.makedirs(model_save_loc)
+    model_dir: str = "%s/%s/" % (args_dict['save_dir'], args_dict['nnet_name'])
+    args_dict['targ_dir'] = "%s/%s/" % (model_dir, 'target')
+    args_dict['curr_dir'] = "%s/%s/" % (model_dir, 'current')
 
-    args_dict["output_save_loc"] = "%s/%s/output.txt" % (args_dict['save_dir'], args_dict['nnet_name'])
+    if not os.path.exists(args_dict['targ_dir']):
+        os.makedirs(args_dict['targ_dir'])
+
+    if not os.path.exists(args_dict['curr_dir']):
+        os.makedirs(args_dict['curr_dir'])
+
+    args_dict["output_save_loc"] = "%s/output.txt" % model_dir
 
     # save args
-    args_save_loc = "%s/args.pkl" % model_save_loc
-    print("Saving arguments to %s" % model_save_loc)
+    args_save_loc = "%s/args.pkl" % model_dir
+    print("Saving arguments to %s" % args_save_loc)
     with open(args_save_loc, "wb") as f:
         pickle.dump(args, f, protocol=-1)
 
@@ -105,25 +114,37 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     return args_dict
 
 
-def do_update(data_files: List[str], update_num: int, env: Environment, num_gbfs_steps: int,
-              num_states: int, heur_fn_i_q, heur_fn_o_qs) -> Tuple[List[np.ndarray], np.ndarray]:
+def copy_files(src_dir: str, dest_dir: str):
+    src_files: List[str] = os.listdir(src_dir)
+    for file_name in src_files:
+        full_file_name: str = os.path.join(src_dir, file_name)
+        if os.path.isfile(full_file_name):
+            shutil.copy(full_file_name, dest_dir)
+
+
+def do_update(back_max: int, update_num: int, env: Environment, num_gbfs_steps: int,
+              num_states: int, eps_max: float, heur_fn_i_q, heur_fn_o_qs) -> Tuple[List[np.ndarray], np.ndarray]:
     gbfs_steps: int = min(update_num + 1, num_gbfs_steps)
+    num_states: int = int(np.ceil(num_states/gbfs_steps))
 
     # Do updates
     output_time_start = time.time()
 
-    print("Updating cost-to-go with GBFS, with %i step(s)" % gbfs_steps)
-    gbfs_updater: GBFSUpdater = GBFSUpdater(env, num_states, data_files, heur_fn_i_q, heur_fn_o_qs,
-                                            gbfs_steps, update_batch_size=10000, eps_max=0.0)
+    print("Updating cost-to-go with value iteration")
+    if num_gbfs_steps > 1:
+        print("Using GBFS with %i step(s) to add extra states to training set" % gbfs_steps)
+    gbfs_updater: GBFSUpdater = GBFSUpdater(env, num_states, back_max, heur_fn_i_q, heur_fn_o_qs,
+                                            gbfs_steps, update_batch_size=10000, eps_max=eps_max)
 
     states_update_nnet: List[np.ndarray]
     output_update: np.ndarray
     states_update_nnet, output_update, is_solved = gbfs_updater.update()
 
     # Print stats
-    print("GBFS produced %s states, %.2f%% solved (%.2f seconds)" % (format(output_update.shape[0], ","),
-                                                                     100.0 * np.mean(is_solved),
-                                                                     time.time() - output_time_start))
+    if num_gbfs_steps > 1:
+        print("GBFS produced %s states, %.2f%% solved (%.2f seconds)" % (format(output_update.shape[0], ","),
+                                                                         100.0 * np.mean(is_solved),
+                                                                         time.time() - output_time_start))
 
     mean_ctg = output_update[:, 0].mean()
     min_ctg = output_update[:, 0].min()
@@ -131,6 +152,20 @@ def do_update(data_files: List[str], update_num: int, env: Environment, num_gbfs
     print("Cost-to-go (mean/min/max): %.2f/%.2f/%.2f" % (mean_ctg, min_ctg, max_ctg))
 
     return states_update_nnet, output_update
+
+
+def load_nnet(nnet_dir: str, env: Environment) -> Tuple[nn.Module, int, int]:
+    nnet_file: str = "%s/model_state_dict.pt" % nnet_dir
+    if os.path.isfile(nnet_file):
+        nnet = nnet_utils.load_nnet(nnet_file, env.get_nnet_model())
+        itr: int = pickle.load(open("%s/train_itr.pkl" % nnet_dir, "rb"))
+        update_num: int = pickle.load(open("%s/update_num.pkl" % nnet_dir, "rb"))
+    else:
+        nnet: nn.Module = env.get_nnet_model()
+        itr: int = 0
+        update_num: int = 0
+
+    return nnet, itr, update_num
 
 
 def main():
@@ -152,37 +187,22 @@ def main():
     print("device: %s, devices: %s, on_gpu: %s" % (device, devices, on_gpu))
 
     # load nnet
-    model_save_loc: str = "%s/%s" % (args_dict['model_dir'], args_dict['update_num'])
-    model_file: str = "%s/model_state_dict.pt" % model_save_loc
-
-    model_save_loc_prev: str = "%s/%s" % (args_dict['model_dir'], args_dict['update_num'] - 1)
-    model_file_prev: str = "%s/model_state_dict.pt" % model_save_loc_prev
-
+    nnet: nn.Module
     itr: int
-    if os.path.isfile(model_file):
-        nnet = nnet_utils.load_nnet(model_file, env.get_nnet_model())
-        itr = pickle.load(open("%s/train_itr.pkl" % model_save_loc, "rb"))
-    elif os.path.isfile(model_file_prev):
-        nnet = nnet_utils.load_nnet(model_file_prev, env.get_nnet_model())
-        itr = pickle.load(open("%s/train_itr.pkl" % model_save_loc_prev, "rb"))
-    else:
-        nnet: nn.Module = env.get_nnet_model()
-        itr = 0
+    update_num: int
+    nnet, itr, update_num = load_nnet(args_dict['curr_dir'], env)
 
     nnet.to(device)
-    if on_gpu and not args_dict['single_gpu_training']:
+    if on_gpu and (not args_dict['single_gpu_training']):
         nnet = nn.DataParallel(nnet)
 
     # training
-    num_updates: int = 0
-
-    train_files: List[str] = glob.glob("%s/*.pkl" % args_dict["train_dir"])
     while itr < args_dict['max_itrs']:
         # update
-        update_model_dir = "%s/%s" % (args_dict['model_dir'], args_dict['update_num'] - 1)
-        all_zeros: bool = args_dict['update_num'] == 0
+        targ_file: str = "%s/model_state_dict.pt" % args_dict['targ_dir']
+        all_zeros: bool = not os.path.isfile(targ_file)
         heur_fn_i_q, heur_fn_o_qs, heur_procs = nnet_utils.start_heur_fn_runners(args_dict['num_update_procs'],
-                                                                                 update_model_dir,
+                                                                                 args_dict['targ_dir'],
                                                                                  device, on_gpu, env,
                                                                                  all_zeros=all_zeros,
                                                                                  clip_zero=True,
@@ -191,35 +211,28 @@ def main():
 
         states_nnet: List[np.ndarray]
         outputs: np.ndarray
-        states_nnet, outputs = do_update(train_files, args_dict['update_num'], env,
+        states_nnet, outputs = do_update(args_dict["back_max"], update_num, env,
                                          args_dict['max_update_gbfs_steps'], args_dict['states_per_update'],
-                                         heur_fn_i_q, heur_fn_o_qs)
+                                         args_dict['eps_max'], heur_fn_i_q, heur_fn_o_qs)
 
         nnet_utils.stop_heuristic_fn_runners(heur_procs, heur_fn_i_q)
 
-        num_updates += 1
-
         # train nnet
         num_train_itrs: int = args_dict['epochs_per_update'] * np.ceil(outputs.shape[0] / args_dict['batch_size'])
-        print("Training model for update number %i for %i iterations" % (args_dict['update_num'], num_train_itrs))
+        print("Training model for update number %i for %i iterations" % (update_num, num_train_itrs))
         last_loss = nnet_utils.train_nnet(nnet, states_nnet, outputs, device, args_dict['batch_size'], num_train_itrs,
                                           itr, args_dict['lr'], args_dict['lr_d'])
         itr += num_train_itrs
 
         # save nnet
-        model_save_loc: str = "%s/%s" % (args_dict['model_dir'], args_dict['update_num'])
-        if not os.path.exists(model_save_loc):
-            os.makedirs(model_save_loc)
-
-        torch.save(nnet.state_dict(), "%s/model_state_dict.pt" % model_save_loc)
-        pickle.dump(itr, open("%s/train_itr.pkl" % model_save_loc, "wb"), protocol=-1)
+        torch.save(nnet.state_dict(), "%s/model_state_dict.pt" % args_dict['curr_dir'])
+        pickle.dump(itr, open("%s/train_itr.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
+        pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
 
         # test
         start_time = time.time()
-        if num_updates % args_dict['testing_freq'] == 0:
-            heuristic_fn = nnet_utils.get_heuristic_fn(nnet, device, env,
-                                                       batch_size=args_dict['update_nnet_batch_size'])
-            gbfs_test(args_dict['val_dir'], env, heuristic_fn, max_solve_steps=args_dict['update_num']+1)
+        heuristic_fn = nnet_utils.get_heuristic_fn(nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
+        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, max_solve_steps=update_num + 1)
 
         print("Test time: %.2f" % (time.time() - start_time))
 
@@ -230,7 +243,9 @@ def main():
         if last_loss < args_dict['loss_thresh']:
             # Update nnet
             print("Updating target network")
-            args_dict['update_num'] = args_dict['update_num'] + 1
+            copy_files(args_dict['curr_dir'], args_dict['targ_dir'])
+            update_num = update_num + 1
+            pickle.dump(update_num, open("%s/update_num.pkl" % args_dict['curr_dir'], "wb"), protocol=-1)
 
     print("Done")
 
