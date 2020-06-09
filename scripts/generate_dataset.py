@@ -15,21 +15,27 @@ def generate_and_save_states(env: Environment, num_states: int, back_max: int, f
         if filepath is None:
             break
 
+        # generate data
         start_time = time.time()
-
         print("Generating data for %s" % filepath)
         states: List[State]
         num_back_steps: List[int]
         states, num_back_steps = env.generate_states(num_states, (0, back_max))
 
+        data_gen_time = time.time() - start_time
+
         # save data
+        start_time = time.time()
+
         data = dict()
         data['states'] = states
         data['num_back_steps'] = num_back_steps
 
         pickle.dump(data, open(filepath, "wb"), protocol=-1)
 
-        print("Time for %s: %s" % (filepath, (time.time() - start_time)))
+        save_time = time.time() - start_time
+
+        print("%s - Data Gen Time: %s, Save Time: %s" % (filepath, data_gen_time, save_time))
 
 
 def main():
