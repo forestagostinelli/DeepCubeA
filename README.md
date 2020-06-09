@@ -41,7 +41,7 @@ One can also add additional states to training set by doing GBFS during the upda
 
 During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
 
-These improvements often make the algorithm take longer.
+These improvements often come at the expense of time.
 
 # Using DeepCubeA to Solve Your Own Problem
 Create your own environment by implementing the abstract methods in `environments/environment_abstract.py`
