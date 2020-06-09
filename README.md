@@ -21,7 +21,7 @@ There are pre-trained models in the `saved_models/` directory as well as `output
 
 These models were trained with 1-4 GPUs and 20-30 CPUs. This varies throughout training as the training is often stopped and started again to make room for other processes.
 
-There are pre-computed results in the `results/` as well as `output.txt` files. 
+There are pre-computed results of A* search in the `results/` as well as `output.txt` files. 
 
 ### Commands to train DeepCubeA to solve the 15-puzzle.
 ###### Train cost-to-go function
