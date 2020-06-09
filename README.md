@@ -8,67 +8,58 @@ For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
 
 # Setup
 For required python packages, please see requirements.txt.
-All packages should be able to be installed with pip
+All packages should be able to be installed with pip or conda
 
 Python version used: 3.7.2
 
 IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current directory to your python path.
 
-For the first run, make sure you create the following directories:
-
-`mkdir data`
-
-`mkdir saved_models`
-
-`mkdir results`
-
-`mkdir results/cube3/`
-
 # Sample script
-Here are the commands to quickly train DeepCubeA to solve the Rubik's cube.
-###### Generate training data
-`python scripts/generate_dataset.py --env cube3 --back_max 30 --data_dir data/cube3/train/ --num_per_file 1000000 --num_files 100 --num_procs 1`
+`train.sh` contains the commands to trian the cost-to-go function as well as using it with A* search.
 
-###### Generate validation data
-`python scripts/generate_dataset.py --env cube3 --back_max 30 --data_dir data/cube3/val/ --num_per_file 10000 --num_files 1 --num_procs 1`
+There are pre-trained models in the `saved_models/` directory as well as `output.txt` files to let you know what output to expect.
 
+These models were trained with 1-4 GPUs and 20-30 CPUs. This varies throughout training as the training is often stopped and started again to make room for other processes.
+
+### Commands to train DeepCubeA to solve the 15-puzzle.
 ###### Train cost-to-go function
-`python ctg_approx/avi.py --env cube3 --states_per_update 1000000 --batch_size 1000 --nnet_name cube3 --num_update_procs 1 --train_dir data/cube3/train/ --val_dir data/cube3/val/ --update_num 0 --max_updates 20`
+python ctg_approx/avi.py --env puzzle15 --states_per_update 50000000 --batch_size 10000 --nnet_name puzzle15 --max_itrs 1000000 --loss_thresh 0.1 --back_max 500 --num_update_procs 30
 
 ###### Solve with A* search, use --verbose for more information
-`python search_methods/astar.py --states data/cube3/test/data_0.pkl --model saved_models/cube3/19/ --env cube3 --weight 0.1 --batch_size 100 --results_file results/cube3/results.pkl`
+python search_methods/astar.py --states data/puzzle15/test/data_0.pkl --model saved_models/puzzle15/current/ --env puzzle15 --weight 0.8 --batch_size 20000 --results_dir results/puzzle15/ --language cpp --nnet_batch_size 10000
 
-###### Solve with greedy best-first search (GBFS)
-`python search_methods/gbfs.py --model_dir saved_models/cube3/19/ --env cube3 --data_dir data/cube3/val/ --max_steps 30`
-
-###### Improving Results
-During approximate value iteration (AVI), one can get better results by increasing the batch size (`--batch_size`) and number of states per update (`--states_per_update`). Increasing the number of updates (`--max_updates`) can also help.
+### Improving Results
+During approximate value iteration (AVI), one can get better results by increasing the batch size (`--batch_size`) and number of states per update (`--states_per_update`).
+Decreasing the threshold before the target network is updated (`--loss_thresh`) can also help.
 
 One can also add additional states to training set by doing GBFS during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_gbfs_steps`). Setting `--max_update_gbfs_steps` to 1 is the same as doing approximate value iteration.
 
 During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
 
+These improvements often make the algorithm take longer.
+
 # Using DeepCubeA to Solve Your Own Problem
 Create your own environment by implementing the abstract methods in `environments/environment_abstract.py`
-See `environments/cube3.py` for an example.
+See the implementations in `environments/` for examples.
 
 After implementing your method, edit `utils/env_utils.py` to return your environment object given your choosen keyword.
 
-Use `tests/fprop_test.py` to make sure basic aspects of your implementation are working correctly.
+Use `tests/timing_test.py` to make sure basic aspects of your implementation are working correctly.
 
 # Parallelism
-Data generation, training, and solving can be easily parallelized across multiple CPUs and GPUs.
-
-When generating data with `scripts/generate_dataset.py`, set the number of CPUs with `--num_procs`
+Training and solving can be easily parallelized across multiple CPUs and GPUs.
 
 When training with `ctg_approx/avi.py`, set the number of workers for doing approximate value iteration with `--num_update_procs`
-This will spawn a separate DNN for the update step for each worker, so marke sure you have enough memory.
-If multiple GPUs are used, then this will spread the workers across the GPUs.
+During the update process, the target DNN is spawned on each available GPU and they work in parallel during the udpate step.
 
 The number of GPUs used can be controlled by setting the `CUDA_VISIBLE_DEVICES` environment variable.
+i.e. `export CUDA_VISIBLE_DEVICES="0,1,2,3"`
 
-# Compiling c++
-mkdir build
-cd build
-cmake -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
-cmake --build . --config Release
+# Compiling C++
+`cd cpp/`
+
+`make`
+
+If you are not able to get the C++ version working on your computer, you can change the `--language` switch for
+`search_methods/astar.py` from `--language cpp` to `--language python`.
+Note that the C++ version is generally faster.
