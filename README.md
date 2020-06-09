@@ -58,6 +58,7 @@ When training with `ctg_approx/avi.py`, set the number of workers for doing appr
 During the update process, the target DNN is spawned on each available GPU and they work in parallel during the udpate step.
 
 The number of GPUs used can be controlled by setting the `CUDA_VISIBLE_DEVICES` environment variable.
+
 i.e. `export CUDA_VISIBLE_DEVICES="0,1,2,3"`
 
 # Compiling C++ for A* Search
