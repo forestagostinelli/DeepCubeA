@@ -1,9 +1,7 @@
 from typing import List, Tuple, Set, Callable, Optional
 from environments.environment_abstract import Environment, State
 import numpy as np
-from utils import search_utils, env_utils, nnet_utils
-import glob
-import pickle
+from utils import search_utils, env_utils, nnet_utils, misc_utils
 from argparse import ArgumentParser
 
 import torch
@@ -124,22 +122,24 @@ class GBFS:
         return instances_unsolved
 
 
-def gbfs_test(data_dir: str, env: Environment, heuristic_fn: Callable, max_solve_steps: Optional[int] = None):
-    data_files: List[str] = glob.glob("%s/*.pkl" % data_dir)
+def gbfs_test(num_states: int, back_max: int, env: Environment, heuristic_fn: Callable,
+              max_solve_steps: Optional[int] = None):
+    # get data
+    back_steps: List[int] = list(np.linspace(0, back_max, 30, dtype=np.int))
+    num_states_per_back_step: List[int] = misc_utils.split_evenly(num_states, len(back_steps))
 
-    # load data
     states: List[State] = []
-    num_back_steps_l: List[int] = []
-    for data_file in data_files:
-        data = pickle.load(open(data_file, "rb"))
+    state_back_steps_l: List[int] = []
 
-        states.extend(data['states'])
-        num_back_steps_l.extend(data['num_back_steps'])
+    for back_step, num_states_i in zip(back_steps, num_states_per_back_step):
+        if num_states_i > 0:
+            states_i, back_steps_i = env.generate_states(num_states_i, (back_step, back_step))
+            states.extend(states_i)
+            state_back_steps_l.extend(back_steps_i)
 
+    state_back_steps: np.ndarray = np.array(state_back_steps_l)
     if max_solve_steps is None:
-        max_solve_steps = max(max(num_back_steps_l), 1)
-
-    num_back_steps: np.ndarray = np.array(num_back_steps_l)
+        max_solve_steps = max(np.max(state_back_steps), 1)
 
     # Do GBFS for each back step
     print("Solving %i states with GBFS with %i steps" % (len(states), max_solve_steps))
@@ -155,9 +155,9 @@ def gbfs_test(data_dir: str, env: Environment, heuristic_fn: Callable, max_solve
     # Get state cost-to-go
     state_ctg_all: np.ndarray = heuristic_fn(states)
 
-    for back_step_test in range(max(num_back_steps_l) + 1):
+    for back_step_test in np.unique(state_back_steps):
         # Get states
-        step_idxs = np.where(num_back_steps == back_step_test)[0]
+        step_idxs = np.where(state_back_steps == back_step_test)[0]
         if len(step_idxs) == 0:
             continue
 

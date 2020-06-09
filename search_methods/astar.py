@@ -6,7 +6,7 @@ from subprocess import Popen, PIPE
 
 from argparse import ArgumentParser
 import torch
-from utils import env_utils, nnet_utils, search_utils, misc_utils
+from utils import env_utils, nnet_utils, search_utils, misc_utils, data_utils
 import pickle
 import time
 import sys
@@ -322,7 +322,7 @@ def main():
     parser.add_argument('--weight', type=float, default=1.0, help="Weight of path cost")
     parser.add_argument('--language', type=str, default="python", help="python or cpp")
 
-    parser.add_argument('--results_file', type=str, required=True, help="File to save results")
+    parser.add_argument('--results_dir', type=str, required=True, help="Directory to save results")
     parser.add_argument('--start_idx', type=int, default=0, help="")
     parser.add_argument('--nnet_batch_size', type=int, default=None, help="Set to control how many states per GPU are "
                                                                           "evaluated by the neural network at a time. "
@@ -331,8 +331,14 @@ def main():
                                                                           "memory.")
 
     parser.add_argument('--verbose', action='store_true', default=False, help="Set for verbose")
+    parser.add_argument('--debug', action='store_true', default=False, help="Set when debugging")
 
     args = parser.parse_args()
+
+    results_file: str = "%s/results.pkl" % args.results_dir
+    output_file: str = "%s/output.txt" % args.results_dir
+    if not args.debug:
+        sys.stdout = data_utils.Logger(output_file, "w")
 
     # get data
     input_data = pickle.load(open(args.states, "rb"))
@@ -348,7 +354,7 @@ def main():
     if args.language == "python":
         solns, paths, times, num_nodes_gen = bwas_python(args, env, states)
     elif args.language == "cpp":
-        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states)
+        solns, paths, times, num_nodes_gen = bwas_cpp(args, env, states, results_file)
     else:
         raise ValueError("Unknown language %s" % args.language)
 
@@ -357,7 +363,7 @@ def main():
     results["times"] = times
     results["num_nodes_generated"] = num_nodes_gen
 
-    pickle.dump(results, open(args.results_file, "wb"), protocol=-1)
+    pickle.dump(results, open(results_file, "wb"), protocol=-1)
 
 
 def bwas_python(args, env: Environment, states: List[State]):
@@ -417,12 +423,12 @@ def bwas_python(args, env: Environment, states: List[State]):
     return solns, paths, times, num_nodes_gen
 
 
-def bwas_cpp(args, env: Environment, states: List[State]):
+def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
     assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35',
                                  'PUZZLE48']) or ('LIGHTSOUT' in args.env.upper())
 
     # Make c++ socket
-    socket_name: str = "%s_cpp_socket" % args.results_file.split(".")[0]
+    socket_name: str = "%s_cpp_socket" % results_file.split(".")[0]
 
     try:
         os.unlink(socket_name)
