@@ -1,26 +1,23 @@
 from typing import List, Tuple
 import numpy as np
-from utils import nnet_utils, misc_utils, data_utils
+from utils import nnet_utils, misc_utils
 from environments.environment_abstract import Environment, State
 from search_methods.gbfs import GBFS
 from torch.multiprocessing import Queue, get_context
-import math
 import time
 
 
-def gbfs_runner(num_states: int, data_files: List[str], update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
+def gbfs_runner(num_states: int, back_max: int, update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
                 proc_id: int, env: Environment, result_queue: Queue, num_steps: int,
                 eps_max: float):
     heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env)
-
-    states: List[State]
-    states, _ = data_utils.load_states_from_files(num_states, data_files)
 
     start_idx: int = 0
     while start_idx < num_states:
         end_idx: int = min(start_idx + update_batch_size, num_states)
 
-        states_itr = states[start_idx:end_idx]
+        # states_itr = states[start_idx:end_idx]
+        states_itr, _ = env.generate_states(end_idx - start_idx, (0, back_max))
         eps: List[float] = list(np.random.rand(len(states_itr)) * eps_max)
 
         gbfs = GBFS(states_itr, env, eps=eps)
@@ -52,7 +49,7 @@ def gbfs_runner(num_states: int, data_files: List[str], update_batch_size: int, 
 
 
 class GBFSUpdater:
-    def __init__(self, env: Environment, num_states: int, data_files: List[str], heur_fn_i_q, heur_fn_o_qs,
+    def __init__(self, env: Environment, num_states: int, back_max: int, heur_fn_i_q, heur_fn_o_qs,
                  num_steps: int, update_batch_size: int = 1000, eps_max: float = 0.0):
         super().__init__()
         ctx = get_context("spawn")
@@ -63,8 +60,7 @@ class GBFSUpdater:
         self.result_queue: ctx.Queue = ctx.Queue()
 
         # num states per process
-        num_states_per_proc: List[int] = [math.floor(num_states/num_procs) for _ in range(num_procs)]
-        num_states_per_proc[-1] += num_states % num_procs
+        num_states_per_proc: List[int] = misc_utils.split_evenly(num_states, num_procs)
 
         self.num_batches: int = int(np.ceil(np.array(num_states_per_proc)/update_batch_size).sum())
 
@@ -75,7 +71,7 @@ class GBFSUpdater:
             if num_states_proc == 0:
                 continue
 
-            proc = ctx.Process(target=gbfs_runner, args=(num_states_proc, data_files, update_batch_size,
+            proc = ctx.Process(target=gbfs_runner, args=(num_states_proc, back_max, update_batch_size,
                                                          heur_fn_i_q, heur_fn_o_qs[proc_id], proc_id, env,
                                                          self.result_queue, num_steps, eps_max))
             proc.daemon = True
