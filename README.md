@@ -2,7 +2,8 @@
 This is the code for [DeepCubeA](https://www.ics.uci.edu/~fagostin/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf) for python3 and PyTorch.
 The original python2, tensorflow code can be found on [CodeOcean](https://codeocean.com/capsule/5723040/tree/v1).
 
-This code is still under development, however, one should be able to use the DeepCubeA algorithm on the Rubik's cube as well as use DeepCubeA on their own environment.
+This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, and 24-puzzle.
+You can also adapt this code to use DeepCubeA to solve new problems that you might be working on.
 
 For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
 
@@ -12,10 +13,13 @@ All packages should be able to be installed with pip or conda
 
 Python version used: 3.7.2
 
-IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current directory to your python path.
+IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current 
+directory to your python path.
 
 # Training and A* Search
 `train.sh` contains the commands to trian the cost-to-go function as well as using it with A* search.
+Note that some of the hyperparameters may be slightly different than those in the original paper as they were later 
+found to give slightly better results.
 
 There are pre-trained models in the `saved_models/` directory as well as `output.txt` files to let you know what output to expect.
 
@@ -43,7 +47,7 @@ During A* search, increasing the weight on the path cost (`--weight`, range shou
 
 These improvements often come at the expense of time.
 
-# Using DeepCubeA to Solve Your Own Problem
+# Using DeepCubeA to Solve New Problems
 Create your own environment by implementing the abstract methods in `environments/environment_abstract.py`
 See the implementations in `environments/` for examples.
 
@@ -60,6 +64,12 @@ During the update process, the target DNN is spawned on each available GPU and t
 The number of GPUs used can be controlled by setting the `CUDA_VISIBLE_DEVICES` environment variable.
 
 i.e. `export CUDA_VISIBLE_DEVICES="0,1,2,3"`
+
+# Memory
+When obtaining training data with approximate value iteration and solving using A* search, the batch size of the data 
+given to the DNN can be controlled with `--update_nnet_batch_size` for the `avi.py` file and `--nnet_batch_size` for
+the `astar.py` file. Reduce this value if your GPUs are running out of memory during approximate value iteration or 
+during A* search.
 
 # Compiling C++ for A* Search
 `cd cpp/`
