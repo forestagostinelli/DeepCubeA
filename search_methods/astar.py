@@ -49,7 +49,6 @@ class Instance:
         for node in nodes:
             heappush(self.open_set, (node.cost, self.heappush_count, node))
             self.heappush_count += 1
-            self.closed_dict[node.state] = node.path_cost
 
     def pop_from_open(self, num_nodes: int) -> List[Node]:
         num_to_pop: int = min(num_nodes, len(self.open_set))
@@ -67,8 +66,10 @@ class Instance:
             path_cost_prev: Optional[float] = self.closed_dict.get(node.state)
             if path_cost_prev is None:
                 nodes_not_in_closed.append(node)
+                self.closed_dict[node.state] = node.path_cost
             elif path_cost_prev > node.path_cost:
                 nodes_not_in_closed.append(node)
+                self.closed_dict[node.state] = node.path_cost
 
         return nodes_not_in_closed
 
