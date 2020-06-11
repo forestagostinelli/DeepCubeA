@@ -18,14 +18,14 @@ directory to your python path.
 
 # Training and A* Search
 `train.sh` contains the commands to trian the cost-to-go function as well as using it with A* search.
-Note that some of the hyperparameters may be slightly different than those in the original paper as they were later 
+Note that some of the hyperparameters may be slightly different than those in the paper as they were later 
 found to give slightly better results.
 
 There are pre-trained models in the `saved_models/` directory as well as `output.txt` files to let you know what output to expect.
 
 These models were trained with 1-4 GPUs and 20-30 CPUs. This varies throughout training as the training is often stopped and started again to make room for other processes.
 
-There are pre-computed results of A* search in the `results/` as well as `output.txt` files. 
+There are pre-computed results of A* search in the `results/` directory. 
 
 ### Commands to train DeepCubeA to solve the 15-puzzle.
 ###### Train cost-to-go function
