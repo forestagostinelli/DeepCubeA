@@ -8,7 +8,7 @@ from random import randrange
 
 
 class NPuzzleState(State):
-    __slots__ = ['tiles']
+    __slots__ = ['tiles', 'hash']
 
     def __init__(self, tiles: np.ndarray):
         self.tiles: np.ndarray = tiles
