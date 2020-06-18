@@ -9,7 +9,7 @@ For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
 
 # Setup
 For required python packages, please see requirements.txt.
-All packages should be able to be installed with pip or conda
+You should be able to install these packages with pip or conda
 
 Python version used: 3.7.2
 
@@ -51,7 +51,7 @@ These improvements often come at the expense of time.
 Create your own environment by implementing the abstract methods in `environments/environment_abstract.py`
 See the implementations in `environments/` for examples.
 
-After implementing your method, edit `utils/env_utils.py` to return your environment object given your choosen keyword.
+After implementing your method, edit `utils/env_utils.py` to return your environment object given your chosen keyword.
 
 Use `tests/timing_test.py` to make sure basic aspects of your implementation are working correctly.
 
