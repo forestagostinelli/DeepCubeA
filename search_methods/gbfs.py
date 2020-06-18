@@ -14,12 +14,13 @@ class Instance:
         self.is_solved: bool = False
         self.num_steps: int = 0
         self.trajs: List[Tuple[State, float]] = []
-        self.seen_states: Set[str] = set()
+        self.seen_states: Set[State] = set()
 
         self.eps = eps
 
     def add_to_traj(self, state: State, cost_to_go: float):
         self.trajs.append((state, cost_to_go))
+        self.seen_states.add(state)
 
     def next_state(self, state: State):
         self.curr_state = state
@@ -111,7 +112,8 @@ class GBFS:
 
             # make random move with probability eps
             eps_rand_move = np.random.random(1)[0] < instance.eps
-            if eps_rand_move:
+            seen_state: bool = state_next in instance.seen_states
+            if eps_rand_move or seen_state:
                 rand_state_idx = np.random.choice(len(state_exp))
                 state_next = state_exp[rand_state_idx]
 
