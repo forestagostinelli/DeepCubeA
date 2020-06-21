@@ -336,6 +336,9 @@ def main():
 
     args = parser.parse_args()
 
+    if not os.path.exists(args.results_dir):
+        os.makedirs(args.results_dir)
+
     results_file: str = "%s/results.pkl" % args.results_dir
     output_file: str = "%s/output.txt" % args.results_dir
     if not args.debug:
@@ -447,6 +450,10 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
         state_dim: int = 16
     elif args.env.upper() == 'PUZZLE24':
         state_dim: int = 25
+    elif args.env.upper() == 'PUZZLE35':
+        state_dim: int = 36
+    elif args.env.upper() == 'PUZZLE48':
+        state_dim: int = 49
     else:
         raise ValueError("Unknown c++ environment: %s" % args.env)
 
@@ -470,11 +477,9 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
 
     for state_idx, state in enumerate(states):
         # Get string rep of state
-        if args.env.upper() == 'CUBE3':
+        if args.env.upper() == "CUBE3":
             state_str: str = " ".join([str(x) for x in state.colors])
-        elif args.env.upper() == 'PUZZLE15':
-            state_str: str = " ".join([str(x) for x in state.tiles])
-        elif args.env.upper() == 'PUZZLE24':
+        elif args.env.upper() in ["PUZZLE15", "PUZZLE24", "PUZZLE35", "PUZZLE48"]:
             state_str: str = " ".join([str(x) for x in state.tiles])
         else:
             raise ValueError("Unknown c++ environment: %s" % args.env)
@@ -563,10 +568,7 @@ def cpp_listener(sock, args, env: Environment, state_dim: int, heur_fn_i_q, heur
             states_np = states_np/9
             states_np = states_np.astype(env.dtype)
             states_nnet: List[np.ndarray] = [states_np]
-        elif args.env.upper() == "PUZZLE15":
-            states_np = states_np.astype(env.dtype)
-            states_nnet: List[np.ndarray] = [states_np]
-        elif args.env.upper() == "PUZZLE24":
+        elif args.env.upper() in ["PUZZLE15", "PUZZLE24", "PUZZLE35", "PUZZLE48"]:
             states_np = states_np.astype(env.dtype)
             states_nnet: List[np.ndarray] = [states_np]
         else:
