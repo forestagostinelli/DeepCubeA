@@ -24,9 +24,7 @@ class ResnetModel(nn.Module):
         self.fc2 = nn.Linear(h1_dim, resnet_dim)
 
         if self.batch_norm:
-            self.bn1 = nn.BatchNorm1d(h1_dim)
-
-        self.bn2 = nn.BatchNorm1d(resnet_dim)
+            self.bn2 = nn.BatchNorm1d(resnet_dim)
 
         # resnet blocks
         for block_num in range(self.num_resnet_blocks):
