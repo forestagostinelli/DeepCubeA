@@ -23,6 +23,7 @@ python search_methods/astar.py --states data/puzzle15/test/data_0.pkl --model sa
 ###### Compare solutions to shortest path
 python scripts/compare_solutions.py --soln1 data/puzzle15/test/data_0.pkl --soln2 results/puzzle15/results.pkl
 
+
 ### 24-puzzle
 
 ###### Train cost-to-go function
@@ -46,3 +47,14 @@ python search_methods/astar.py --states data/puzzle35/test/data_0.pkl --model sa
 ###### See solution results
 python scripts/compare_solutions.py --soln1 results/puzzle35/results.pkl --soln2 results/puzzle35/results.pkl
 
+
+### 48-puzzle
+
+###### Train cost-to-go function
+python ctg_approx/avi.py --env puzzle48 --states_per_update 50000000 --batch_size 10000 --nnet_name puzzle48 --max_itrs 2000000 --loss_thresh 1.0 --back_max 1000 --max_update_gbfs_steps 200 --num_update_procs 30 --num_test 1000
+
+###### Solve with A* search, use --verbose for more information
+python search_methods/astar.py --states data/puzzle48/test/data_0.pkl --model saved_models/puzzle48/current/ --env puzzle48 --weight 0.6 --batch_size 20000 --results_dir results/puzzle48/ --language cpp --nnet_batch_size 10000
+
+###### See solution results
+python scripts/compare_solutions.py --soln1 results/puzzle48/results.pkl --soln2 results/puzzle48/results.pkl
