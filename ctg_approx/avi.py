@@ -232,7 +232,8 @@ def main():
         # test
         start_time = time.time()
         heuristic_fn = nnet_utils.get_heuristic_fn(nnet, device, env, batch_size=args_dict['update_nnet_batch_size'])
-        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, max_solve_steps=update_num + 1)
+        max_solve_steps: int = min(update_num + 1, args_dict['back_max'])
+        gbfs_test(args_dict['num_test'], args_dict['back_max'], env, heuristic_fn, max_solve_steps=max_solve_steps)
 
         print("Test time: %.2f" % (time.time() - start_time))
 
