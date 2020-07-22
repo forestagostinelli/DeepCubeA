@@ -16,16 +16,32 @@ from torch.multiprocessing import Process
 
 
 class Node:
-    __slots__ = ['state', 'path_cost', 'cost', 'is_solved', 'parent_move', 'parent']
+    __slots__ = ['state', 'path_cost', 'heuristic', 'cost', 'is_solved', 'parent_move', 'parent', 'transition_costs',
+                 'children', 'bellman']
 
-    def __init__(self, state: State, path_cost: float, cost: float, is_solved: bool,
+    def __init__(self, state: State, path_cost: float, is_solved: bool,
                  parent_move: Optional[int], parent):
         self.state: State = state
         self.path_cost: float = path_cost
-        self.cost: float = cost
+        self.heuristic: Optional[float] = None
+        self.cost: Optional[float] = None
         self.is_solved: bool = is_solved
         self.parent_move: Optional[int] = parent_move
         self.parent: Optional[Node] = parent
+
+        self.transition_costs: List[float] = []
+        self.children: List[Node] = []
+
+        self.bellman: float = np.inf
+
+    def compute_bellman(self):
+        if self.is_solved:
+            self.bellman = 0.0
+        elif len(self.children) == 0:
+            self.bellman = self.heuristic
+        else:
+            for node_c, tc in zip(self.children, self.transition_costs):
+                self.bellman = min(self.bellman, tc + node_c.heuristic)
 
 
 OpenSetElem = Tuple[float, int, Node]
@@ -33,7 +49,7 @@ OpenSetElem = Tuple[float, int, Node]
 
 class Instance:
 
-    def __init__(self, state: State, cost: float, is_solved):
+    def __init__(self, root_node: Node):
         self.open_set: List[OpenSetElem] = []
         self.heappush_count: int = 0
         self.closed_dict: Dict[State, float] = dict()
@@ -41,7 +57,7 @@ class Instance:
         self.goal_nodes: List[Node] = []
         self.num_nodes_generated: int = 0
 
-        self.root_node: Node = Node(state, 0.0, cost, is_solved, None, None)
+        self.root_node: Node = root_node
 
         self.push_to_open([self.root_node])
 
@@ -112,6 +128,7 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]], 
     path_costs_c_by_node: List[List[float]] = misc_utils.unflatten(path_costs_c, split_idxs_c)
 
     # Reshape lists
+    tcs_by_inst_node: List[List[List[float]]] = misc_utils.unflatten(tcs_by_node, split_idxs)
     patch_costs_c_by_inst_node: List[List[List[float]]] = misc_utils.unflatten(path_costs_c_by_node,
                                                                                split_idxs)
     states_c_by_inst_node: List[List[List[State]]] = misc_utils.unflatten(states_c_by_node, split_idxs)
@@ -123,6 +140,7 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]], 
     for inst_idx, instance in enumerate(instances):
         nodes_c_by_inst.append([])
         parent_nodes: List[Node] = popped_nodes_all[inst_idx]
+        tcs_by_node: List[List[float]] = tcs_by_inst_node[inst_idx]
         path_costs_c_by_node: List[List[float]] = patch_costs_c_by_inst_node[inst_idx]
         states_c_by_node: List[List[State]] = states_c_by_inst_node[inst_idx]
 
@@ -132,15 +150,20 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]], 
         tcs_node: List[float]
         states_c: List[State]
         str_reps_c: List[str]
-        for parent_node, path_costs_c, states_c, is_solved_c in zip(parent_nodes, path_costs_c_by_node,
-                                                                    states_c_by_node, is_solved_c_by_node):
+        for parent_node, tcs_node, path_costs_c, states_c, is_solved_c in zip(parent_nodes, tcs_by_node,
+                                                                              path_costs_c_by_node, states_c_by_node,
+                                                                              is_solved_c_by_node):
             state: State
             for move_idx, state in enumerate(states_c):
                 path_cost: float = path_costs_c[move_idx]
                 is_solved: bool = is_solved_c[move_idx]
-                node_c: Node = Node(state, path_cost, 0.0, is_solved, move_idx, parent_node)
+                node_c: Node = Node(state, path_cost, is_solved, move_idx, parent_node)
 
                 nodes_c_by_inst[inst_idx].append(node_c)
+
+                parent_node.children.append(node_c)
+
+            parent_node.transition_costs.extend(tcs_node)
 
         instance.num_nodes_generated += len(nodes_c_by_inst[inst_idx])
 
@@ -154,30 +177,30 @@ def remove_in_closed(instances: List[Instance], nodes_c_all: List[List[Node]]) -
     return nodes_c_all
 
 
-def add_heuristic_and_cost(nodes: List[List[Node]], heuristic_fn: Callable,
-                           weight: float) -> Tuple[np.ndarray, np.ndarray]:
+def add_heuristic_and_cost(nodes: List[Node], heuristic_fn: Callable,
+                           weights: List[float]) -> Tuple[np.ndarray, np.ndarray]:
     # flatten nodes
-    nodes_flat: List[Node]
-    nodes_flat, _ = misc_utils.flatten(nodes)
+    nodes: List[Node]
 
-    if len(nodes_flat) == 0:
+    if len(nodes) == 0:
         return np.zeros(0), np.zeros(0)
 
     # get heuristic
-    states_flat: List[State] = [node.state for node in nodes_flat]
+    states: List[State] = [node.state for node in nodes]
 
     # compute node cost
-    heuristics_flat = heuristic_fn(states_flat)
-    path_costs_flat: np.ndarray = np.array([node.path_cost for node in nodes_flat])
-    is_solved_flat: np.ndarray = np.array([node.is_solved for node in nodes_flat])
+    heuristics = heuristic_fn(states)
+    path_costs: np.ndarray = np.array([node.path_cost for node in nodes])
+    is_solved: np.ndarray = np.array([node.is_solved for node in nodes])
 
-    costs_flat: np.ndarray = weight * path_costs_flat + heuristics_flat * np.logical_not(is_solved_flat)
+    costs: np.ndarray = np.array(weights) * path_costs + heuristics * np.logical_not(is_solved)
 
     # add cost to node
-    for node, cost in zip(nodes_flat, costs_flat):
+    for node, heuristic, cost in zip(nodes, heuristics, costs):
+        node.heuristic = heuristic
         node.cost = cost
 
-    return path_costs_flat, heuristics_flat
+    return path_costs, heuristics
 
 
 def add_to_open(instances: List[Instance], nodes: List[List[Node]]) -> None:
@@ -208,25 +231,27 @@ def get_path(node: Node) -> Tuple[List[State], List[int], float]:
 
 class AStar:
 
-    def __init__(self, states: List[State], env: Environment, heuristic_fn: Callable, weight: float = 1.0):
+    def __init__(self, states: List[State], env: Environment, heuristic_fn: Callable, weights: List[float]):
         self.env: Environment = env
-        self.weight: float = weight
+        self.weights: List[float] = weights
         self.step_num: int = 0
 
         self.timings: Dict[str, float] = {"pop": 0.0, "expand": 0.0, "check": 0.0, "heur": 0.0,
                                           "add": 0.0, "itr": 0.0}
 
         # compute starting costs
-        heuristics: np.ndarray = heuristic_fn(states)
+        root_nodes: List[Node] = []
         is_solved_states: np.ndarray = self.env.is_solved(states)
-        costs: np.ndarray = heuristics * np.logical_not(is_solved_states)
+        for state, is_solved in zip(states, is_solved_states):
+            root_node: Node = Node(state, 0.0, is_solved, None, None)
+            root_nodes.append(root_node)
+
+        add_heuristic_and_cost(root_nodes, heuristic_fn, self.weights)
 
         # initialize instances
         self.instances: List[Instance] = []
-
-        state: State
-        for state, cost, is_solved_state in zip(states, costs, is_solved_states):
-            self.instances.append(Instance(state, cost, is_solved_state))
+        for root_node in root_nodes:
+            self.instances.append(Instance(root_node))
 
     def step(self, heuristic_fn: Callable, batch_size: int, include_solved: bool = False, verbose: bool = False):
         start_time_itr = time.time()
@@ -246,15 +271,17 @@ class AStar:
         nodes_c_all: List[List[Node]] = expand_nodes(instances, popped_nodes_all, self.env)
         expand_time = time.time() - start_time
 
+        # Get heuristic of children, do heur before check so we can do backup
+        start_time = time.time()
+        nodes_c_all_flat, _ = misc_utils.flatten(nodes_c_all)
+        weights, _ = misc_utils.flatten([[weight] * len(nodes_c) for weight, nodes_c in zip(self.weights, nodes_c_all)])
+        path_costs, heuristics = add_heuristic_and_cost(nodes_c_all_flat, heuristic_fn, weights)
+        heur_time = time.time() - start_time
+
         # Check if children are in closed
         start_time = time.time()
         nodes_c_all = remove_in_closed(instances, nodes_c_all)
         check_time = time.time() - start_time
-
-        # Get heuristic of children
-        start_time = time.time()
-        path_costs, heuristics = add_heuristic_and_cost(nodes_c_all, heuristic_fn, self.weight)
-        heur_time = time.time() - start_time
 
         # Add to open
         start_time = time.time()
@@ -390,7 +417,7 @@ def bwas_python(args, env: Environment, states: List[State]):
         start_time = time.time()
 
         num_itrs: int = 0
-        astar = AStar([state], env, heuristic_fn, weight=args.weight)
+        astar = AStar([state], env, heuristic_fn, [args.weight])
         while not min(astar.has_found_goal()):
             astar.step(heuristic_fn, args.batch_size, verbose=args.verbose)
             num_itrs += 1
@@ -428,8 +455,7 @@ def bwas_python(args, env: Environment, states: List[State]):
 
 
 def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
-    assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35',
-                                 'PUZZLE48']) or ('LIGHTSOUT' in args.env.upper())
+    assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35', 'PUZZLE48', 'LIGHTSOUT7'])
 
     # Make c++ socket
     socket_name: str = "%s_cpp_socket" % results_file.split(".")[0]
@@ -454,6 +480,8 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
         state_dim: int = 36
     elif args.env.upper() == 'PUZZLE48':
         state_dim: int = 49
+    elif args.env.upper() == 'LIGHTSOUT7':
+        state_dim: int = 49
     else:
         raise ValueError("Unknown c++ environment: %s" % args.env)
 
@@ -470,6 +498,8 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
     heur_proc.daemon = True
     heur_proc.start()
 
+    time.sleep(2)  # give socket time to intialize
+
     solns: List[List[int]] = []
     paths: List[List[State]] = []
     times: List = []
@@ -480,6 +510,8 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
         if args.env.upper() == "CUBE3":
             state_str: str = " ".join([str(x) for x in state.colors])
         elif args.env.upper() in ["PUZZLE15", "PUZZLE24", "PUZZLE35", "PUZZLE48"]:
+            state_str: str = " ".join([str(x) for x in state.tiles])
+        elif args.env.upper() in ["LIGHTSOUT7"]:
             state_str: str = " ".join([str(x) for x in state.tiles])
         else:
             raise ValueError("Unknown c++ environment: %s" % args.env)
@@ -569,6 +601,9 @@ def cpp_listener(sock, args, env: Environment, state_dim: int, heur_fn_i_q, heur
             states_np = states_np.astype(env.dtype)
             states_nnet: List[np.ndarray] = [states_np]
         elif args.env.upper() in ["PUZZLE15", "PUZZLE24", "PUZZLE35", "PUZZLE48"]:
+            states_np = states_np.astype(env.dtype)
+            states_nnet: List[np.ndarray] = [states_np]
+        elif args.env.upper() in ["LIGHTSOUT7"]:
             states_np = states_np.astype(env.dtype)
             states_nnet: List[np.ndarray] = [states_np]
         else:
