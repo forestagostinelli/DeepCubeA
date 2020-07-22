@@ -3,41 +3,74 @@ import numpy as np
 from utils import nnet_utils, misc_utils
 from environments.environment_abstract import Environment, State
 from search_methods.gbfs import GBFS
+from search_methods.astar import AStar, Node
 from torch.multiprocessing import Queue, get_context
 import time
 
 
-def gbfs_runner(num_states: int, back_max: int, update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
-                proc_id: int, env: Environment, result_queue: Queue, num_steps: int,
-                eps_max: float):
+def gbfs_update(states: List[State], env: Environment, num_steps: int, heuristic_fn, eps_max: float):
+    eps: List[float] = list(np.random.rand(len(states)) * eps_max)
+
+    gbfs = GBFS(states, env, eps=eps)
+    for _ in range(num_steps):
+        gbfs.step(heuristic_fn)
+
+    trajs: List[List[Tuple[State, float]]] = gbfs.get_trajs()
+
+    trajs_flat: List[Tuple[State, float]]
+    trajs_flat, _ = misc_utils.flatten(trajs)
+
+    is_solved: np.ndarray = np.array(gbfs.get_is_solved())
+
+    states_update: List = []
+    cost_to_go_update_l: List[float] = []
+    for traj in trajs_flat:
+        states_update.append(traj[0])
+        cost_to_go_update_l.append(traj[1])
+
+    cost_to_go_update = np.array(cost_to_go_update_l)
+
+    return states_update, cost_to_go_update, is_solved
+
+
+def astar_update(states: List[State], env: Environment, num_steps: int, heuristic_fn):
+    weights: List[float] = list(np.random.rand(len(states)))
+    astar = AStar(states, env, heuristic_fn, weights)
+    for _ in range(num_steps):
+        astar.step(heuristic_fn, 1, verbose=False)
+
+    nodes_popped: List[List[Node]] = astar.get_popped_nodes()
+    nodes_popped_flat: List[Node]
+    nodes_popped_flat, _ = misc_utils.flatten(nodes_popped)
+
+    for node in nodes_popped_flat:
+        node.compute_bellman()
+
+    states_update: List[State] = [node.state for node in nodes_popped_flat]
+    cost_to_go_update: np.array = np.array([node.bellman for node in nodes_popped_flat])
+
+    is_solved: np.array = np.array(astar.has_found_goal())
+
+    return states_update, cost_to_go_update, is_solved
+
+
+def update_runner(num_states: int, back_max: int, update_batch_size: int, heur_fn_i_q, heur_fn_o_q,
+                  proc_id: int, env: Environment, result_queue: Queue, num_steps: int, update_method: str,
+                  eps_max: float):
     heuristic_fn = nnet_utils.heuristic_fn_queue(heur_fn_i_q, heur_fn_o_q, proc_id, env)
 
     start_idx: int = 0
     while start_idx < num_states:
         end_idx: int = min(start_idx + update_batch_size, num_states)
 
-        # states_itr = states[start_idx:end_idx]
         states_itr, _ = env.generate_states(end_idx - start_idx, (0, back_max))
-        eps: List[float] = list(np.random.rand(len(states_itr)) * eps_max)
 
-        gbfs = GBFS(states_itr, env, eps=eps)
-        for _ in range(num_steps):
-            gbfs.step(heuristic_fn)
-
-        trajs: List[List[Tuple[State, float]]] = gbfs.get_trajs()
-
-        trajs_flat: List[Tuple[State, float]]
-        trajs_flat, _ = misc_utils.flatten(trajs)
-
-        is_solved: np.ndarray = np.array(gbfs.get_is_solved())
-
-        states_update: List = []
-        cost_to_go_update_l: List[float] = []
-        for traj in trajs_flat:
-            states_update.append(traj[0])
-            cost_to_go_update_l.append(traj[1])
-
-        cost_to_go_update = np.array(cost_to_go_update_l)
+        if update_method.upper() == "GBFS":
+            states_update, cost_to_go_update, is_solved = gbfs_update(states_itr, env, num_steps, heuristic_fn, eps_max)
+        elif update_method.upper() == "ASTAR":
+            states_update, cost_to_go_update, is_solved = astar_update(states_itr, env, num_steps, heuristic_fn)
+        else:
+            raise ValueError("Unknown update method %s" % update_method)
 
         states_update_nnet: List[np.ndaray] = env.state_to_nnet_input(states_update)
 
@@ -48,9 +81,9 @@ def gbfs_runner(num_states: int, back_max: int, update_batch_size: int, heur_fn_
     result_queue.put(None)
 
 
-class GBFSUpdater:
+class Updater:
     def __init__(self, env: Environment, num_states: int, back_max: int, heur_fn_i_q, heur_fn_o_qs,
-                 num_steps: int, update_batch_size: int = 1000, eps_max: float = 0.0):
+                 num_steps: int, update_method: str, update_batch_size: int = 1000, eps_max: float = 0.0):
         super().__init__()
         ctx = get_context("spawn")
         self.num_steps = num_steps
@@ -71,9 +104,9 @@ class GBFSUpdater:
             if num_states_proc == 0:
                 continue
 
-            proc = ctx.Process(target=gbfs_runner, args=(num_states_proc, back_max, update_batch_size,
-                                                         heur_fn_i_q, heur_fn_o_qs[proc_id], proc_id, env,
-                                                         self.result_queue, num_steps, eps_max))
+            proc = ctx.Process(target=update_runner, args=(num_states_proc, back_max, update_batch_size,
+                                                           heur_fn_i_q, heur_fn_o_qs[proc_id], proc_id, env,
+                                                           self.result_queue, num_steps, update_method, eps_max))
             proc.daemon = True
             proc.start()
             self.procs.append(proc)
