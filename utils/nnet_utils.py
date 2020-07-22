@@ -248,7 +248,7 @@ def heuristic_fn_par(states: List[State], env: Environment, heur_fn_i_q, heur_fn
 
 
 # parallel training
-def heuristic_fn_queue(heuristic_fn_input_queue, heuristic_fn_output_queue, proc_id, env):
+def heuristic_fn_queue(heuristic_fn_input_queue, heuristic_fn_output_queue, proc_id, env: Environment):
     def heuristic_fn(states):
         states_nnet = env.state_to_nnet_input(states)
         heuristic_fn_input_queue.put((proc_id, states_nnet))

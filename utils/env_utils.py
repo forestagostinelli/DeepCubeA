@@ -15,6 +15,10 @@ def get_environment(env_name: str) -> Environment:
         from environments.n_puzzle import NPuzzle
         puzzle_dim: int = int(math.sqrt(int(puzzle_n_regex.group(1)) + 1))
         env = NPuzzle(puzzle_dim)
+    elif 'lightsout' in env_name:
+        from environments.lights_out import LightsOut
+        m = re.search('lightsout([\d]+)', env_name)
+        env = LightsOut(int(m.group(1)))
     else:
         raise ValueError('No known environment %s' % env_name)
 
