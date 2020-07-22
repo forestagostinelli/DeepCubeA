@@ -324,7 +324,7 @@ void parallelWeightedAStar(const Environment *env, float depthPenalty, int numPa
 
 		itrTime = getTimeElapsed(startTime,std::chrono::high_resolution_clock::now());
 
-		printf("Iteration: %i, Min/Max - Depth: %i/%i, Value: %.2f/%.2f, Cost: %.2f/%.2f, OpenSize: %li, ClosedSize: %li, Time: %f, Num Added: %li\n\n",searchItr,minDepth,maxDepth,minValue,maxValue,minCost,maxCost,open.size(),closed.size(),itrTime,nodesToAdd.size());
+		printf("Iteration: %i, Min/Max - Depth: %i/%i, Heur: %.2f/%.2f, Cost: %.2f/%.2f, OpenSize: %li, ClosedSize: %li, Time: %f, Num Added: %li\n\n",searchItr,minDepth,maxDepth,minValue,maxValue,minCost,maxCost,open.size(),closed.size(),itrTime,nodesToAdd.size());
 
 		searchItr++;
 	}
