@@ -2,7 +2,7 @@ from utils import data_utils, nnet_utils, env_utils
 from typing import Dict, List, Tuple, Any
 
 from environments.environment_abstract import Environment
-from updaters.gbfs_updater import GBFSUpdater
+from updaters.updater import Updater
 from search_methods.gbfs import gbfs_test
 import torch
 
@@ -56,20 +56,24 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
                                                                                   "each process update. "
                                                                                   "Make smaller if running out of "
                                                                                   "memory.")
-    parser.add_argument('--max_update_gbfs_steps', type=int, default=1, help="Number of steps to take when trying to "
-                                                                             "solve training states with "
-                                                                             "greedy best-first search (GBFS). "
-                                                                             "Each state "
-                                                                             "encountered when solving is added to the "
-                                                                             "training set. Number of steps starts at "
-                                                                             "1 and is increased every update until "
-                                                                             "the maximum number is reached. "
-                                                                             "Value of 1 is the same as doing "
-                                                                             "value iteration on only given training "
-                                                                             "states. Increasing this number "
-                                                                             "can make the cost-to-go function more "
-                                                                             "robust by exploring more of the "
-                                                                             "state space.")
+    parser.add_argument('--max_update_steps', type=int, default=1, help="Number of steps to take when trying to "
+                                                                        "solve training states with "
+                                                                        "greedy best-first search (GBFS) or A* search. "
+                                                                        "Each state "
+                                                                        "encountered when solving is added to the "
+                                                                        "training set. Number of steps starts at "
+                                                                        "1 and is increased every update until "
+                                                                        "the maximum number is reached. "
+                                                                        "Value of 1 is the same as doing "
+                                                                        "value iteration on only given training "
+                                                                        "states. Increasing this number "
+                                                                        "can make the cost-to-go function more "
+                                                                        "robust by exploring more of the "
+                                                                        "state space.")
+
+    parser.add_argument('--update_method', type=str, default="GBFS", help="GBFS or ASTAR. If max_update_steps is 1 "
+                                                                          "then either one is the same as doing value "
+                                                                          "iteration")
 
     parser.add_argument('--eps_max', type=float, default=0, help="When addings training states with GBFS, each "
                                                                  "instance will have an eps that is distributed "
@@ -122,29 +126,30 @@ def copy_files(src_dir: str, dest_dir: str):
             shutil.copy(full_file_name, dest_dir)
 
 
-def do_update(back_max: int, update_num: int, env: Environment, num_gbfs_steps: int,
+def do_update(back_max: int, update_num: int, env: Environment, max_update_steps: int, update_method: str,
               num_states: int, eps_max: float, heur_fn_i_q, heur_fn_o_qs) -> Tuple[List[np.ndarray], np.ndarray]:
-    gbfs_steps: int = min(update_num + 1, num_gbfs_steps)
-    num_states: int = int(np.ceil(num_states/gbfs_steps))
+    update_steps: int = min(update_num + 1, max_update_steps)
+    num_states: int = int(np.ceil(num_states / update_steps))
 
     # Do updates
     output_time_start = time.time()
 
     print("Updating cost-to-go with value iteration")
-    if num_gbfs_steps > 1:
-        print("Using GBFS with %i step(s) to add extra states to training set" % gbfs_steps)
-    gbfs_updater: GBFSUpdater = GBFSUpdater(env, num_states, back_max, heur_fn_i_q, heur_fn_o_qs,
-                                            gbfs_steps, update_batch_size=10000, eps_max=eps_max)
+    if max_update_steps > 1:
+        print("Using %s with %i step(s) to add extra states to training set" % (update_method.upper(), update_steps))
+    updater: Updater = Updater(env, num_states, back_max, heur_fn_i_q, heur_fn_o_qs, update_steps, update_method,
+                               update_batch_size=10000, eps_max=eps_max)
 
     states_update_nnet: List[np.ndarray]
     output_update: np.ndarray
-    states_update_nnet, output_update, is_solved = gbfs_updater.update()
+    states_update_nnet, output_update, is_solved = updater.update()
 
     # Print stats
-    if num_gbfs_steps > 1:
-        print("GBFS produced %s states, %.2f%% solved (%.2f seconds)" % (format(output_update.shape[0], ","),
-                                                                         100.0 * np.mean(is_solved),
-                                                                         time.time() - output_time_start))
+    if max_update_steps > 1:
+        print("%s produced %s states, %.2f%% solved (%.2f seconds)" % (update_method.upper(),
+                                                                       format(output_update.shape[0], ","),
+                                                                       100.0 * np.mean(is_solved),
+                                                                       time.time() - output_time_start))
 
     mean_ctg = output_update[:, 0].mean()
     min_ctg = output_update[:, 0].min()
@@ -212,8 +217,9 @@ def main():
         states_nnet: List[np.ndarray]
         outputs: np.ndarray
         states_nnet, outputs = do_update(args_dict["back_max"], update_num, env,
-                                         args_dict['max_update_gbfs_steps'], args_dict['states_per_update'],
-                                         args_dict['eps_max'], heur_fn_i_q, heur_fn_o_qs)
+                                         args_dict['max_update_steps'], args_dict['update_method'],
+                                         args_dict['states_per_update'], args_dict['eps_max'],
+                                         heur_fn_i_q, heur_fn_o_qs)
 
         nnet_utils.stop_heuristic_fn_runners(heur_procs, heur_fn_i_q)
 
