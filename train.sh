@@ -39,7 +39,7 @@ python scripts/compare_solutions.py --soln1 data/puzzle24/test/data_0.pkl --soln
 ### 35-puzzle
 
 ###### Train cost-to-go function
-python ctg_approx/avi.py --env puzzle35 --states_per_update 50000000 --batch_size 10000 --nnet_name puzzle35 --max_itrs 1000000 --loss_thresh 1.0 --back_max 1000 --max_update_gbfs_steps 200 --num_update_procs 30
+python ctg_approx/avi.py --env puzzle35 --states_per_update 50000000 --batch_size 10000 --nnet_name puzzle35 --max_itrs 1000000 --loss_thresh 1.0 --back_max 1000 --max_update_steps 200 --num_update_procs 30
 
 ###### Solve with A* search, use --verbose for more information
 python search_methods/astar.py --states data/puzzle35/test/data_0.pkl --model saved_models/puzzle35/current/ --env puzzle35 --weight 0.8 --batch_size 20000 --results_dir results/puzzle35/ --language cpp --nnet_batch_size 10000
@@ -51,10 +51,21 @@ python scripts/compare_solutions.py --soln1 results/puzzle35/results.pkl --soln2
 ### 48-puzzle
 
 ###### Train cost-to-go function
-python ctg_approx/avi.py --env puzzle48 --states_per_update 50000000 --batch_size 10000 --nnet_name puzzle48 --max_itrs 2000000 --loss_thresh 1.0 --back_max 1000 --max_update_gbfs_steps 200 --num_update_procs 30 --num_test 1000
+python ctg_approx/avi.py --env puzzle48 --states_per_update 50000000 --batch_size 10000 --nnet_name puzzle48 --max_itrs 2000000 --loss_thresh 1.0 --back_max 1000 --max_update_steps 200 --num_update_procs 30 --num_test 1000
 
 ###### Solve with A* search, use --verbose for more information
 python search_methods/astar.py --states data/puzzle48/test/data_0.pkl --model saved_models/puzzle48/current/ --env puzzle48 --weight 0.6 --batch_size 20000 --results_dir results/puzzle48/ --language cpp --nnet_batch_size 10000
 
 ###### See solution results
 python scripts/compare_solutions.py --soln1 results/puzzle48/results.pkl --soln2 results/puzzle48/results.pkl
+
+### Lights Out 7x7
+###### Train cost-to-go function
+python ctg_approx/avi.py --env lightsout7 --states_per_update 500000 --batch_size 1000 --nnet_name lightsout7 --max_itrs 1000000 --loss_thresh 1.0 --back_max 50 --max_update_steps 200 --update_method astar --num_update_procs 30 --num_test 1000
+
+###### Solve with A* search, use --verbose for more information
+python search_methods/astar.py --states data/lightsout7/test/data_0.pkl --model saved_models/lightsout7/current/ --env lightsout7 --weight 0.2 --batch_size 1000 --results_dir results/lightsout7/ --language cpp --nnet_batch_size 10000
+
+###### See solution results
+python scripts/compare_solutions.py --soln1 results/lightsout7/results.pkl --soln2 results/lightsout7/results.pkl
+
