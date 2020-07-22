@@ -2,7 +2,7 @@
 This is the code for [DeepCubeA](https://www.ics.uci.edu/~fagostin/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf) for python3 and PyTorch.
 The original python2, tensorflow code can be found on [CodeOcean](https://codeocean.com/capsule/5723040/tree/v1).
 
-This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, and 48-puzzle.
+This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, 48-puzzle, and Lights Out.
 You can also adapt this code to use DeepCubeA to solve new problems that you might be working on.
 
 For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
@@ -41,7 +41,7 @@ There are pre-computed results of A* search in the `results/` directory.
 During approximate value iteration (AVI), one can get better results by increasing the batch size (`--batch_size`) and number of states per update (`--states_per_update`).
 Decreasing the threshold before the target network is updated (`--loss_thresh`) can also help.
 
-One can also add additional states to training set by doing GBFS during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_gbfs_steps`). Setting `--max_update_gbfs_steps` to 1 is the same as doing approximate value iteration.
+One can also add additional states to training set by doing greedy best-first search (GBFS) during the update stage and adding the states encountered during GBFS to the states used for approximate value iteration (`--max_update_steps`). Setting `--max_update_steps` to 1 is the same as doing approximate value iteration.
 
 During A* search, increasing the weight on the path cost (`--weight`, range should be [0,1]) and the batch size (`--batch_size`) generally improves results.
 
