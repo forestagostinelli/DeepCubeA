@@ -22692,3 +22692,4 @@ Back Steps: 30, %Solved: 0.30, avgSolveSteps: 10.00, CTG Mean(Std/Min/Max): 13.7
 Test time: 9.46
 Last loss was 0.113452
 Done
+device: cpu, devices: [], on_gpu: False
