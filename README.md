@@ -5,7 +5,7 @@ The original python2, tensorflow code can be found on [CodeOcean](https://codeoc
 This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, 48-puzzle, and Lights Out.
 You can also adapt this code to use DeepCubeA to solve new problems that you might be working on.
 
-For any issues, please contact Forest Agostinelli (fagostin@uci.edu)
+For any issues, please contact Forest Agostinelli (foresta@cse.sc.edu)
 
 # Setup
 For required python packages, please see requirements.txt.
