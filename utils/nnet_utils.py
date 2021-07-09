@@ -121,11 +121,10 @@ def train_nnet(nnet: nn.Module, states_nnet: List[np.ndarray], outputs: np.ndarr
 # pytorch device
 def get_device() -> Tuple[torch.device, List[int], bool]:
     device: torch.device = torch.device("cpu")
-    devices: List[int] = []
+    devices: List[int] = get_available_gpu_nums()
     on_gpu: bool = False
-    if ('CUDA_VISIBLE_DEVICES' in os.environ) and torch.cuda.is_available():
+    if devices and torch.cuda.is_available():
         device = torch.device("cuda:%i" % 0)
-        devices = [int(x) for x in os.environ['CUDA_VISIBLE_DEVICES'].split(",")]
         on_gpu = True
 
     return device, devices, on_gpu
@@ -200,11 +199,8 @@ def get_heuristic_fn(nnet: nn.Module, device: torch.device, env: Environment, cl
 
 
 def get_available_gpu_nums() -> List[int]:
-    gpu_nums: List[int] = []
-    if ('CUDA_VISIBLE_DEVICES' in os.environ) and (len(os.environ['CUDA_VISIBLE_DEVICES']) > 0):
-        gpu_nums = [int(x) for x in os.environ['CUDA_VISIBLE_DEVICES'].split(",")]
-
-    return gpu_nums
+    devices: Optional[str] = os.environ.get('CUDA_VISIBLE_DEVICES')
+    return [int(x) for x in devices.split(',')] if devices else []
 
 
 def load_heuristic_fn(nnet_dir: str, device: torch.device, on_gpu: bool, nnet: nn.Module, env: Environment,
@@ -293,10 +289,7 @@ def start_heur_fn_runners(num_procs: int, nnet_dir: str, device, on_gpu: bool, e
         heuristic_fn_output_queues.append(heuristic_fn_output_queue)
 
     # initialize heuristic procs
-    if ('CUDA_VISIBLE_DEVICES' in os.environ) and (len(os.environ['CUDA_VISIBLE_DEVICES']) > 0):
-        gpu_nums = [int(x) for x in os.environ['CUDA_VISIBLE_DEVICES'].split(",")]
-    else:
-        gpu_nums = [None]
+    gpu_nums = get_available_gpu_nums() or [-1]
 
     heur_procs: List[ctx.Process] = []
     for gpu_num in gpu_nums:
