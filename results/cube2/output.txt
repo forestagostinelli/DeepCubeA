@@ -1,0 +1,7 @@
+device: cuda:0, devices: [0], on_gpu: True
+Times - pop: 0.36, expand: 20.06, check: 6.30, heur: 39.94, add: 0.81, itr: 67.48, num_itrs: 115
+State: 0, SolnCost: 9.00, # Moves: 9, # Nodes Gen: 2,020,734, Time: 67.51
+Times - pop: 0.45, expand: 31.22, check: 7.64, heur: 47.80, add: 0.61, itr: 87.72, num_itrs: 137
+State: 1, SolnCost: 10.00, # Moves: 10, # Nodes Gen: 2,416,734, Time: 87.87
+Times - pop: 0.50, expand: 27.86, check: 8.33, heur: 51.03, add: 10.57, itr: 98.29, num_itrs: 146
+State: 2, SolnCost: 10.00, # Moves: 10, # Nodes Gen: 2,578,734, Time: 98.47
