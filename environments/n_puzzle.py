@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple, Union
 import numpy as np
 import torch.nn as nn
@@ -93,7 +94,14 @@ class NPuzzle(Environment):
 
     def get_nnet_model(self) -> nn.Module:
         state_dim: int = self.dim * self.dim
-        nnet = ResnetModel(state_dim, self.dim ** 2, 5000, 1000, 4, 1, True)
+        kwargs = dict(state_dim=state_dim, one_hot_depth=self.dim ** 2, h1_dim=5000, resnet_dim=1000,
+                      num_resnet_blocks=4, out_dim=1, batch_norm=True)
+        param_file = os.environ['NNET_PARAMS']
+        import json
+        with open(param_file) as f:
+            overrides = json.load(f)
+            kwargs.update(overrides)
+        nnet = ResnetModel(**kwargs)
 
         return nnet
 
