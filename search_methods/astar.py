@@ -455,7 +455,7 @@ def bwas_python(args, env: Environment, states: List[State]):
 
 
 def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
-    assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35', 'PUZZLE48', 'LIGHTSOUT7'])
+    assert (args.env.upper() in ['CUBE3', 'CUBE4', 'PUZZLE15', 'PUZZLE24', 'PUZZLE35', 'PUZZLE48', 'LIGHTSOUT7', 'BOOLEANARRAY8'])
 
     # Make c++ socket
     socket_name: str = "%s_cpp_socket" % results_file.split(".")[0]
@@ -482,6 +482,8 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
         state_dim: int = 49
     elif args.env.upper() == 'LIGHTSOUT7':
         state_dim: int = 49
+    elif args.env.upper() == 'BOOLEANARRAY8':
+        state_dim: int = 8
     else:
         raise ValueError("Unknown c++ environment: %s" % args.env)
 
@@ -513,6 +515,8 @@ def bwas_cpp(args, env: Environment, states: List[State], results_file: str):
             state_str: str = " ".join([str(x) for x in state.tiles])
         elif args.env.upper() in ["LIGHTSOUT7"]:
             state_str: str = " ".join([str(x) for x in state.tiles])
+        elif args.env.upper() in ["BOOLEANARRAY8"]:
+            state_str: str = " ".join([str(x) for x in state.booleans])
         else:
             raise ValueError("Unknown c++ environment: %s" % args.env)
 
