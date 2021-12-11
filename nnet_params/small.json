@@ -1,0 +1,5 @@
+{
+    "h1_dim": 1000,
+    "resnet_dim": 200,
+    "num_resnet_blocks": 4
+}
