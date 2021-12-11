@@ -3,7 +3,7 @@ import numpy as np
 from torch import nn
 from random import randrange
 
-from utils.pytorch_models import ResnetModel
+from utils.env_utils import create_nnet_with_overridden_params
 from .environment_abstract import Environment, State
 
 
@@ -88,10 +88,10 @@ class Cube3(Environment):
         return len(self.moves)
 
     def get_nnet_model(self) -> nn.Module:
-        state_dim: int = (self.cube_len ** 2) * 6
-        nnet = ResnetModel(state_dim, 6, 5000, 1000, 4, 1, True)
+        kwargs = dict(state_dim=(self.cube_len ** 2) * 6, one_hot_depth=6, h1_dim=5000, resnet_dim=1000,
+                      num_resnet_blocks=4, out_dim=1, batch_norm=True)
 
-        return nnet
+        return create_nnet_with_overridden_params(kwargs)
 
     def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[Cube3State], List[int]]:
         assert (num_states > 0)

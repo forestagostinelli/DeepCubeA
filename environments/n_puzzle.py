@@ -1,9 +1,8 @@
-import os
 from typing import List, Tuple, Union
 import numpy as np
 import torch.nn as nn
 
-from utils.pytorch_models import ResnetModel
+from utils.env_utils import create_nnet_with_overridden_params
 from .environment_abstract import Environment, State
 from random import randrange
 
@@ -93,22 +92,10 @@ class NPuzzle(Environment):
         return len(self.moves)
 
     def get_nnet_model(self) -> nn.Module:
-        state_dim: int = self.dim * self.dim
-        kwargs = dict(state_dim=state_dim, one_hot_depth=self.dim ** 2, h1_dim=5000, resnet_dim=1000,
+        kwargs = dict(state_dim=self.dim ** 2, one_hot_depth=self.dim ** 2, h1_dim=5000, resnet_dim=1000,
                       num_resnet_blocks=4, out_dim=1, batch_norm=True)
-        param_file = os.environ['NNET_PARAMS']
-        print('param_file: ' + param_file)
 
-        import json
-        with open(param_file) as f:
-            overrides = json.load(f)
-            kwargs.update(overrides)
-        print('kwargs: ' + str(kwargs))
-
-        nnet = ResnetModel(**kwargs)
-        print('nnet: ' + str(nnet))
-
-        return nnet
+        return create_nnet_with_overridden_params(kwargs)
 
     def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[NPuzzleState],
                                                                                           List[int]]:

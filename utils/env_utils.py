@@ -1,6 +1,11 @@
+import os
 import re
 import math
+
+from torch import nn
+
 from environments.environment_abstract import Environment
+from utils.pytorch_models import ResnetModel
 
 
 def get_environment(env_name: str) -> Environment:
@@ -31,3 +36,19 @@ def get_environment(env_name: str) -> Environment:
         raise ValueError('No known environment %s' % env_name)
 
     return env
+
+
+def create_nnet_with_overridden_params(kwargs) -> nn.Module:
+    param_file = os.environ['NNET_PARAMS']
+    print('param_file: ' + param_file)
+
+    import json
+    with open(param_file) as f:
+        overrides = json.load(f)
+        kwargs.update(overrides)
+    print('kwargs: ' + str(kwargs))
+
+    nnet = ResnetModel(**kwargs)
+    print('nnet: ' + str(nnet))
+
+    return nnet

@@ -2,7 +2,7 @@ from typing import List, Tuple, Union
 import numpy as np
 import torch.nn as nn
 
-from utils.pytorch_models import ResnetModel
+from utils.env_utils import create_nnet_with_overridden_params
 from .environment_abstract import Environment, State
 
 
@@ -81,7 +81,7 @@ class BooleanArray(Environment):
         return len(self.moves)
 
     def get_nnet_model(self) -> nn.Module:
-        state_dim: int = self.dim
-        nnet = ResnetModel(state_dim, 0, 5000, 1000, 4, 1, True)
+        kwargs = dict(state_dim=self.dim, one_hot_depth=0, h1_dim=5000, resnet_dim=1000,
+                      num_resnet_blocks=4, out_dim=1, batch_norm=True)
 
-        return nnet
+        return create_nnet_with_overridden_params(kwargs)

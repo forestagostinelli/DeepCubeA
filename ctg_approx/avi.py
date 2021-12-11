@@ -100,7 +100,6 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     # make save directory
     nnet_name = args_dict['nnet_name']
     model_dir: str = "%s/%s" % (args_dict['save_dir'], nnet_name)
-    print(args_dict['append_date_time'])
     if args_dict['append_date_time'] == "True":
         model_dir += "/%s_%s" % (nnet_name, time.strftime("%Y-%m-%dT%H-%M-%S"))
     args_dict['targ_dir'] = "%s/%s/" % (model_dir, 'target')

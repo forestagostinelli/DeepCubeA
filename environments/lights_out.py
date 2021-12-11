@@ -2,7 +2,7 @@ from typing import List, Tuple, Union
 import numpy as np
 from torch import nn
 
-from utils.pytorch_models import ResnetModel
+from utils.env_utils import create_nnet_with_overridden_params
 from .environment_abstract import Environment, State
 
 
@@ -78,9 +78,10 @@ class LightsOut(Environment):
         return self.num_tiles
 
     def get_nnet_model(self) -> nn.Module:
-        nnet = ResnetModel(self.num_tiles, 6, 5000, 1000, 4, 1, True)
+        kwargs = dict(state_dim=self.num_tiles, one_hot_depth=6, h1_dim=5000, resnet_dim=1000,
+                      num_resnet_blocks=4, out_dim=1, batch_norm=True)
 
-        return nnet
+        return create_nnet_with_overridden_params(kwargs)
 
     def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[LOState], List[int]]:
         assert (num_states > 0)
