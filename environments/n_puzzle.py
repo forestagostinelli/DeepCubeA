@@ -97,11 +97,16 @@ class NPuzzle(Environment):
         kwargs = dict(state_dim=state_dim, one_hot_depth=self.dim ** 2, h1_dim=5000, resnet_dim=1000,
                       num_resnet_blocks=4, out_dim=1, batch_norm=True)
         param_file = os.environ['NNET_PARAMS']
+        print('param_file: ' + param_file)
+
         import json
         with open(param_file) as f:
             overrides = json.load(f)
             kwargs.update(overrides)
+        print('kwargs: ' + str(kwargs))
+
         nnet = ResnetModel(**kwargs)
+        print('nnet: ' + str(nnet))
 
         return nnet
 

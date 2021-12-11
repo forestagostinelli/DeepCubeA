@@ -88,6 +88,9 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     parser.add_argument('--nnet_name', type=str, required=True, help="Name of neural network")
     parser.add_argument('--update_num', type=int, default=0, help="Update number")
     parser.add_argument('--save_dir', type=str, default="saved_models", help="Director to which to save model")
+    parser.add_argument('--append_date_time', type=str, default="True", help="Whether or not to append the date and "
+                                                                             "time to the nnet_name when saving the "
+                                                                             "model")
 
     # parse arguments
     args = parser.parse_args()
@@ -95,7 +98,11 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
     args_dict: Dict[str, Any] = vars(args)
 
     # make save directory
-    model_dir: str = "%s/%s/" % (args_dict['save_dir'], args_dict['nnet_name'])
+    nnet_name = args_dict['nnet_name']
+    model_dir: str = "%s/%s" % (args_dict['save_dir'], nnet_name)
+    print(args_dict['append_date_time'])
+    if args_dict['append_date_time'] == "True":
+        model_dir += "/%s_%s" % (nnet_name, time.strftime("%Y-%m-%dT%H-%M-%S"))
     args_dict['targ_dir'] = "%s/%s/" % (model_dir, 'target')
     args_dict['curr_dir'] = "%s/%s/" % (model_dir, 'current')
 
