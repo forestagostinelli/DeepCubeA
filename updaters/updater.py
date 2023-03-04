@@ -47,7 +47,7 @@ def astar_update(states: List[State], env: Environment, num_steps: int, heuristi
         node.compute_bellman()
 
     states_update: List[State] = [node.state for node in nodes_popped_flat]
-    cost_to_go_update: np.array = np.array([node.bellman for node in nodes_popped_flat])
+    cost_to_go_update: np.array = np.array([node.bellman for node in nodes_popped_flat]) # TODO this is the place where target for network is generated
 
     is_solved: np.array = np.array(astar.has_found_goal())
 

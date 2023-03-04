@@ -4,7 +4,7 @@ from torch import nn
 from random import randrange
 
 from utils.pytorch_models import ResnetModel
-from .environment_abstract import Environment, State
+from environment_abstract import Environment, State
 
 
 class Cube3State(State):
@@ -25,8 +25,8 @@ class Cube3State(State):
 
 
 class Cube3(Environment):
+    # Moves are in pairs: (move, -1) followed by (move, 1).
     moves: List[str] = ["%s%i" % (f, n) for f in ['U', 'D', 'L', 'R', 'B', 'F'] for n in [-1, 1]]
-    moves_rev: List[str] = ["%s%i" % (f, n) for f in ['U', 'D', 'L', 'R', 'B', 'F'] for n in [1, -1]]
 
     def __init__(self):
         super().__init__()
@@ -54,9 +54,7 @@ class Cube3(Environment):
         return states_next, transition_costs
 
     def prev_state(self, states: List[Cube3State], action: int) -> List[Cube3State]:
-        move: str = self.moves[action]
-        move_rev_idx: int = np.where(np.array(self.moves_rev) == np.array(move))[0][0]
-
+        move_rev_idx = action + 1 if action % 2 == 0 else action - 1
         return self.next_state(states, move_rev_idx)[0]
 
     def generate_goal_states(self, num_states: int, np_format: bool = False) -> Union[List[Cube3State], np.ndarray]:
