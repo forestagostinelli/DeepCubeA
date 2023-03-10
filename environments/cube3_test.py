@@ -1,16 +1,15 @@
 # import environments, and cube3
 import numpy as np
 from typing import List, Dict, Tuple, Union
-from cube3 import Cube3
+from environments.cube3 import Cube3
 
 cube_env = Cube3()
 
 # Generate solved state
-"""
-a = cube_env.generate_goal_states(1)
-print(a[0].colors)
+a = cube_env.generate_goal_states(2)
+a[1] = cube_env.next_state([a[1]], 0)[0][0]
+# print(a[0].colors)
 print(cube_env.is_solved(a))
-"""
 
 # Generate tile representations after moving each face once
 """
@@ -112,3 +111,39 @@ for color1 in range(len(colors)):
 
 # Number of edges: 12
 print(len(valid_edges))
+
+# Hardcoded dictionaries for corners and edges
+corner_tiles = {
+    "WBO": [2,20,44],
+    "WBR": [0,26,47],
+    "WGO": [8,35,38],
+    "WGR": [6,29,53],
+    "YBO": [9,18,42],
+    "YBR": [11,24,45],
+    "YGO": [15,33,36],
+    "YGR": [17,27,51],
+}
+edge_tiles = {
+    "WB": [1,23],
+    "WG": [7,32],
+    "WO": [5,41],
+    "WR": [3,50],
+    "YB": [10,21],
+    "YG": [16,30],
+    "YO": [12,39],
+    "YR": [14,48],
+    "BO": [19,43],
+    "BR": [25,46],
+    "GO": [34,37],
+    "GR": [28,52],
+}
+
+def is_solved_corner(states, corner: str) -> np.ndarray:
+    tiles_to_check = corner_tiles[corner]
+    states_np = np.stack([state.colors for state in states], axis=0)
+    is_equal = np.equal(states_np[:, tiles_to_check], np.expand_dims(cube_env.goal_colors[tiles_to_check], 0))
+
+    return np.all(is_equal, axis=1)
+
+for corner in corner_tiles.keys():
+    print(f"Corner: {corner}, is solved?: {is_solved_corner(a, corner)}")

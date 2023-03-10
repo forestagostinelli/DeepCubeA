@@ -45,6 +45,32 @@ class Cube3(Environment):
 
         self.rotate_idxs_new, self.rotate_idxs_old = self._compute_rotation_idxs(self.cube_len, self.moves)
 
+        # Dictionaries for corners and edges with their corresponding tiles:
+        self.corner_tiles = {
+            "WBO": [2,20,44],
+            "WBR": [0,26,47],
+            "WGO": [8,35,38],
+            "WGR": [6,29,53],
+            "YBO": [9,18,42],
+            "YBR": [11,24,45],
+            "YGO": [15,33,36],
+            "YGR": [17,27,51],
+        }
+        self.edge_tiles = {
+            "WB": [1,23],
+            "WG": [7,32],
+            "WO": [5,41],
+            "WR": [3,50],
+            "YB": [10,21],
+            "YG": [16,30],
+            "YO": [12,39],
+            "YR": [14,48],
+            "BO": [19,43],
+            "BR": [25,46],
+            "GO": [34,37],
+            "GR": [28,52],
+        }
+
     def next_state(self, states: List[Cube3State], action: int) -> Tuple[List[Cube3State], List[float]]:
         states_np = np.stack([x.colors for x in states], axis=0)
         states_next_np, transition_costs = self._move_np(states_np, action)
