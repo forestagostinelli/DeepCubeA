@@ -118,6 +118,12 @@ class Cube3(Environment):
         return nnet
 
     def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[Cube3State], List[int]]:
+        """
+        Create a list of cube states, for each, scramble them with up to backwards_range[1]+1 moves
+        @param num_states create how many cubes
+        @param backwards_range (min, max) number of turns to scramble
+        """
+
         assert (num_states > 0)
         assert (backwards_range[0] >= 0)
         assert self.fixed_actions, "Environments without fixed actions must implement their own method"
@@ -126,24 +132,31 @@ class Cube3(Environment):
         scrambs: List[int] = list(range(backwards_range[0], backwards_range[1] + 1))
         num_env_moves: int = self.get_num_moves()
 
-        # Get goal states
+        # Get goal states (solved cubes)
         states_np: np.ndarray = self.generate_goal_states(num_states, np_format=True)
 
         # Scrambles
-        scramble_nums: np.array = np.random.choice(scrambs, num_states)
-        num_back_moves: np.array = np.zeros(num_states)
+        scramble_nums: np.array = np.random.choice(scrambs, num_states) # how many moves to scramble per cube
+        num_back_moves: np.array = np.zeros(num_states) # how many turns have been made currently
 
         # Go backward from goal state
         moves_lt = num_back_moves < scramble_nums
         while np.any(moves_lt):
-            idxs: np.ndarray = np.where(moves_lt)[0]
+            # Get which indices still need to be scrambled further
+            idxs: np.ndarray = np.where(moves_lt)[0] 
+            # We will only scramble up to len(idxs) / 12 (moves)
             subset_size: int = int(max(len(idxs) / num_env_moves, 1))
+            # Pick random indices to scramble
             idxs: np.ndarray = np.random.choice(idxs, subset_size)
 
+            # Select random move from move list
             move: int = randrange(num_env_moves)
+            # All idx selected cubes will make this turn
             states_np[idxs], _ = self._move_np(states_np[idxs], move)
 
+            # Update how many turns have been made
             num_back_moves[idxs] = num_back_moves[idxs] + 1
+            # Update which cubes still need to be scrambled 
             moves_lt[idxs] = num_back_moves[idxs] < scramble_nums[idxs]
 
         states: List[Cube3State] = [Cube3State(x) for x in list(states_np)]
@@ -185,12 +198,31 @@ class Cube3(Environment):
         return states_exp, tc_l
 
     def _move_np(self, states_np: np.ndarray, action: int):
+        """
+        For the cubes in states_np, they turn will turn via action
+        Args:
+            states_np: cube states to be turned
+            action: the turn that all cube states will make
+        Returns:
+            Return the next state for the cubes
+        """
         action_str: str = self.moves[action]
 
         states_next_np: np.ndarray = states_np.copy()
+        # Turn all cubes via the dictionary move function
+        # old idx -> new idx per cube
+        '''
+        e.g. action_str = "U"
+        print(self.rotate_idxs_old[action_str])
+        print(self.rotate_idxs_new[action_str])
+        -
+        [ 2  5  8  8  7  6  6  3  0  0  1  2 38 41 44 20 23 26 47 50 53 29 32 35]
+        [ 0  1  2  2  5  8  8  7  6  6  3  0 20 23 26 47 50 53 29 32 35 38 41 44]
+        '''
         states_next_np[:, self.rotate_idxs_new[action_str]] = states_np[:, self.rotate_idxs_old[action_str]]
 
-        transition_costs: List[float] = [1.0 for _ in range(states_np.shape[0])] #TODO update transition costs
+        # Transition cost for a turn is 1
+        transition_costs: List[float] = [1.0]*states_np.shape[0] #TODO: maybe this needs to be changed
 
         return states_next_np, transition_costs
 
