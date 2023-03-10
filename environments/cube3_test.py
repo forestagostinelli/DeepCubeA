@@ -6,8 +6,9 @@ from environments.cube3 import Cube3
 cube_env = Cube3()
 
 # Generate solved state
-a = cube_env.generate_goal_states(2)
-a[1] = cube_env.next_state([a[1]], 0)[0][0]
+a = cube_env.generate_goal_states(3)
+a[1] = cube_env.next_state([a[1]], 0)[0][0] # U
+a[2] = cube_env.next_state([a[2]], 4)[0][0] # L
 # print(a[0].colors)
 print(cube_env.is_solved(a))
 
@@ -138,12 +139,28 @@ edge_tiles = {
     "GR": [28,52],
 }
 
+def transition_costs_solvetop(states, gamma=0.9) -> List[float]:
+    corner_names = ["WBO", "WBR", "WGO", "WGR"]
+    edge_names = ["WB", "WG", "WO", "WR"]
+    corner_tiles_to_check = []
+    edge_tiles_to_check = []
+    for corner_name in corner_names:
+        corner_tiles_to_check += corner_tiles[corner_name]
+    for edge_name in edge_names:
+        edge_tiles_to_check += edge_tiles[edge_name]
+    states_np = np.stack([state.colors for state in states], axis=0)
+    corner_is_equal = np.equal(states_np[:, corner_tiles_to_check], np.expand_dims(cube_env.goal_colors[corner_tiles_to_check], 0))
+    edge_is_equal = np.equal(states_np[:, edge_tiles_to_check], np.expand_dims(cube_env.goal_colors[edge_tiles_to_check], 0))
+    return 1 - gamma/2*(np.sum(corner_is_equal, axis=1)/12 + np.sum(edge_is_equal, axis=1)/8)
+
 def is_solved_corner(states, corner: str) -> np.ndarray:
     tiles_to_check = corner_tiles[corner]
     states_np = np.stack([state.colors for state in states], axis=0)
     is_equal = np.equal(states_np[:, tiles_to_check], np.expand_dims(cube_env.goal_colors[tiles_to_check], 0))
 
-    return np.all(is_equal, axis=1)
+    return np.sum(is_equal, axis=1)
 
 for corner in corner_tiles.keys():
     print(f"Corner: {corner}, is solved?: {is_solved_corner(a, corner)}")
+
+print(transition_costs_solvetop(a))

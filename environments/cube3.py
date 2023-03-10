@@ -197,6 +197,21 @@ class Cube3(Environment):
 
         return states_exp, tc_l
 
+    # For fully solved top face, transition = 1-gamma, for completely unsolved top face, transition = 1
+    def transition_costs_solvetop(self, states_np: np.ndarray, gamma: int = 0.9) -> np.ndarray:
+        corner_names = ["WBO", "WBR", "WGO", "WGR"]
+        edge_names = ["WB", "WG", "WO", "WR"]
+        # Lists of corners and edges to verify
+        corner_tiles_to_check = []
+        edge_tiles_to_check = []
+        for corner_name in corner_names:
+            corner_tiles_to_check += self.corner_tiles[corner_name]
+        for edge_name in edge_names:
+            edge_tiles_to_check += self.edge_tiles[edge_name]
+        corner_is_equal = np.equal(states_np[:, corner_tiles_to_check], np.expand_dims(self.goal_colors[corner_tiles_to_check], 0))
+        edge_is_equal = np.equal(states_np[:, edge_tiles_to_check], np.expand_dims(self.goal_colors[edge_tiles_to_check], 0))
+        return gamma/2*(np.sum(corner_is_equal, axis=1)/12 + np.sum(edge_is_equal, axis=1)/8)
+
     def _move_np(self, states_np: np.ndarray, action: int):
         """
         For the cubes in states_np, they turn will turn via action
@@ -222,7 +237,10 @@ class Cube3(Environment):
         states_next_np[:, self.rotate_idxs_new[action_str]] = states_np[:, self.rotate_idxs_old[action_str]]
 
         # Transition cost for a turn is 1
-        transition_costs: List[float] = [1.0]*states_np.shape[0] #TODO: maybe this needs to be changed
+        # transition_costs: List[float] = [1.0]*states_np.shape[0] #TODO: maybe this needs to be changed
+
+        # Transition cost based on whether top is solved
+        transition_costs: List[float] = 1 + transition_costs_solvetop(states_next_np) - transition_costs_solvetop(states_np)
 
         return states_next_np, transition_costs
 
