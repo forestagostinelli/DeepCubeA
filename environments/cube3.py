@@ -4,7 +4,7 @@ from torch import nn
 from random import randrange
 
 from utils.pytorch_models import ResnetModel
-from environment_abstract import Environment, State
+from environments.environment_abstract import Environment, State
 
 
 class Cube3State(State):
@@ -164,7 +164,7 @@ class Cube3(Environment):
         states_next_np: np.ndarray = states_np.copy()
         states_next_np[:, self.rotate_idxs_new[action_str]] = states_np[:, self.rotate_idxs_old[action_str]]
 
-        transition_costs: List[float] = [1.0 for _ in range(states_np.shape[0])]
+        transition_costs: List[float] = [1.0 for _ in range(states_np.shape[0])] #TODO update transition costs
 
         return states_next_np, transition_costs
 

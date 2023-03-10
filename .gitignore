@@ -2,3 +2,5 @@
 */__pycache__/
 environments/__pycache__/
 utils/__pycache__/
+slurm*.out
+saved_models/cube3/*
