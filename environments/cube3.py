@@ -240,7 +240,7 @@ class Cube3(Environment):
         # transition_costs: List[float] = [1.0]*states_np.shape[0] #TODO: maybe this needs to be changed
 
         # Transition cost based on whether top is solved
-        transition_costs: List[float] = 1 + transition_costs_solvetop(states_next_np) - transition_costs_solvetop(states_np)
+        transition_costs: List[float] = 1 + self.transition_costs_solvetop(states_next_np) - self.transition_costs_solvetop(states_np)
 
         return states_next_np, transition_costs
 
