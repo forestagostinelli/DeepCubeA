@@ -77,7 +77,7 @@ class Sokoban(Environment):
 
         self.num_moves: int = 4
 
-        self.states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
+        # self.states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
 
     @property
     def num_actions_max(self):
@@ -179,8 +179,9 @@ class Sokoban(Environment):
         assert (num_states > 0)
         assert (step_range[0] >= 0)
 
-        state_idxs = np.random.randint(0, len(self.states_train), size=num_states)
-        states_seed: List[SokobanState] = [self.states_train[idx] for idx in state_idxs]
+        states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
+        state_idxs = np.random.randint(0, len(states_train), size=num_states)
+        states_seed: List[SokobanState] = [states_train[idx] for idx in state_idxs]
         states, _ = self._random_walk(states_seed, (0, 100))
         states_goal, num_steps_l = self._random_walk(states, step_range)
 
