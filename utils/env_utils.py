@@ -19,6 +19,9 @@ def get_environment(env_name: str) -> Environment:
         from environments.lights_out import LightsOut
         m = re.search('lightsout([\d]+)', env_name)
         env = LightsOut(int(m.group(1)))
+    elif env_name == 'sokoban':
+        from environments.sokoban import Sokoban
+        env = Sokoban(10, 4)
     else:
         raise ValueError('No known environment %s' % env_name)
 
