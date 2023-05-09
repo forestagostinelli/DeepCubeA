@@ -142,9 +142,9 @@ class Sokoban(Environment):
         return states_next, transition_costs
 
     def state_to_nnet_input(self, states: List[SokobanState]):
-        agent_mat: np.ndarray = np.zeros((len(states), self.dim, self.dim), dtype=np.int)
+        agent_mat: np.ndarray = np.zeros((len(states), self.dim, self.dim), dtype=np.bool)
         for idx, state in enumerate(states):
-            agent_mat[idx, state.agent[0], state.agent[1]] = 1
+            agent_mat[idx, state.agent[0], state.agent[1]] = True
 
         walls_mat = np.stack([x.walls for x in states], axis=0)
         boxes_mat = np.stack([x.boxes for x in states], axis=0)
@@ -182,7 +182,9 @@ class Sokoban(Environment):
         states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
         state_idxs = np.random.randint(0, len(states_train), size=num_states)
         states_seed: List[SokobanState] = [states_train[idx] for idx in state_idxs]
+
         states, _ = self._random_walk(states_seed, (0, 100))
+
         states_goal, num_steps_l = self._random_walk(states, step_range)
 
         goals_mat = np.stack([x.boxes for x in states_goal], axis=0)
