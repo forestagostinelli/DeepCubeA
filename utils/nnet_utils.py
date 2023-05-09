@@ -101,7 +101,7 @@ def train_nnet(nnet: nn.Module, states_nnet: List[np.ndarray], outputs: np.ndarr
         last_loss = loss.item()
         # display progress
         if (train_itr % display_itrs == 0) and display:
-            print("Itr: %i, lr: %.2E, loss: %.2f, targ_ctg: %.2f, nnet_ctg: %.2f, "
+            print("Itr: %i, lr: %.2E, loss: %.2E, targ_ctg: %.2f, nnet_ctg: %.2f, "
                   "Time: %.2f" % (
                       train_itr, lr_itr, loss.item(), target_cost_to_go.mean().item(), nnet_cost_to_go.mean().item(),
                       time.time() - start_time))
