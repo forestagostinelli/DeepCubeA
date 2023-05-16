@@ -136,9 +136,6 @@ class Sokoban(Environment):
 
         transition_costs: List[int] = [1 for _ in range(len(states))]
 
-        val = sum([states_next[idx] != states[idx] for idx in range(len(states))])
-        print(val)
-
         return states_next, transition_costs
 
     def state_to_nnet_input(self, states: List[SokobanState]):
