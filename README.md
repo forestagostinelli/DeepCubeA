@@ -2,7 +2,8 @@
 This is the code for [DeepCubeA](https://cse.sc.edu/~foresta/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf) for python3 and PyTorch.
 The original python2, tensorflow code can be found on [CodeOcean](https://codeocean.com/capsule/5723040/tree/v1).
 
-This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, 48-puzzle, and Lights Out.
+This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, 48-puzzle, and Lights Out. Sokoban is still being converted from the previous Python 2.7 format.
+
 You can also adapt this code to use DeepCubeA to solve new problems that you might be working on.
 
 For any issues, please contact Forest Agostinelli (foresta@cse.sc.edu)
@@ -79,3 +80,20 @@ during A* search.
 If you are not able to get the C++ version working on your computer, you can change the `--language` switch for
 `search_methods/astar.py` from `--language cpp` to `--language python`.
 Note that the C++ version is generally faster.
+
+# Citation
+To cite this project, please use
+
+```
+@article{agostinelli2019solving,
+  title={Solving the Rubik’s cube with deep reinforcement learning and search},
+  author={Agostinelli, Forest and McAleer, Stephen and Shmakov, Alexander and Baldi, Pierre},
+  journal={Nature Machine Intelligence},
+  volume={1},
+  number={8},
+  pages={356--363},
+  year={2019},
+  publisher={Nature Publishing Group UK London}
+}
+```
+
