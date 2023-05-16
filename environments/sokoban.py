@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from environments.environment_abstract import Environment, State
 
 from utils.pytorch_models import ResnetModel
+from random import randrange
 
 import pickle
 
@@ -79,23 +80,19 @@ class Sokoban(Environment):
 
         # self.states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
 
-    @property
-    def num_actions_max(self):
-        return self.num_moves
-
     def get_num_moves(self) -> int:
         return self.num_moves
 
     def rand_action(self, states: List[State]) -> List[int]:
         return list(np.random.randint(0, self.num_moves, size=len(states)))
 
-    def next_state(self, states: List[SokobanState], actions: List[int]) -> Tuple[List[SokobanState], List[float]]:
+    def next_state(self, states: List[SokobanState], action: int) -> Tuple[List[SokobanState], List[float]]:
         agent = np.stack([state.agent for state in states], axis=0)
         boxes = np.stack([state.boxes for state in states], axis=0)
         walls_next = np.stack([state.walls for state in states], axis=0)
 
         idxs_arange = np.arange(0, len(states))
-        agent_next_tmp = self._get_next_idx(agent, actions)
+        agent_next_tmp = self._get_next_idx(agent, action)
         agent_next = np.zeros(agent_next_tmp.shape, dtype=np.int)
 
         boxes_next = boxes.copy()
@@ -106,7 +103,7 @@ class Sokoban(Environment):
 
         # agent -> box
         agent_box = boxes[idxs_arange, agent_next_tmp[:, 0], agent_next_tmp[:, 1]]
-        boxes_next_tmp = self._get_next_idx(agent_next_tmp, actions)
+        boxes_next_tmp = self._get_next_idx(agent_next_tmp, action)
 
         box_wall = walls_next[idxs_arange, boxes_next_tmp[:, 0], boxes_next_tmp[:, 1]]
         box_box = boxes[idxs_arange, boxes_next_tmp[:, 0], boxes_next_tmp[:, 1]]
@@ -138,6 +135,9 @@ class Sokoban(Environment):
             states_next.append(state_next)
 
         transition_costs: List[int] = [1 for _ in range(len(states))]
+
+        val = sum([states_next[idx] != states[idx] for idx in range(len(states))])
+        print(val)
 
         return states_next, transition_costs
 
@@ -183,8 +183,7 @@ class Sokoban(Environment):
         state_idxs = np.random.randint(0, len(states_train), size=num_states)
         states_seed: List[SokobanState] = [states_train[idx] for idx in state_idxs]
 
-        states, _ = self._random_walk(states_seed, (0, 100))
-
+        states, _ = self._random_walk(states_seed, (1, 100))
         states_goal, num_steps_l = self._random_walk(states, step_range)
 
         goals_mat = np.stack([x.boxes for x in states_goal], axis=0)
@@ -204,26 +203,25 @@ class Sokoban(Environment):
         step_nums: np.array = np.random.choice(scrambs, num_states)
         step_nums_curr: np.array = np.zeros(num_states)
 
-        # Go backward from goal state
-        steps_lt = step_nums_curr < step_nums
-        while np.any(steps_lt):
-            idxs: np.ndarray = np.where(steps_lt)[0]
+        # random walk
+        while np.max(step_nums_curr < step_nums):
+            idxs: np.ndarray = np.where((step_nums_curr < step_nums))[0]
+            subset_size: int = int(max(len(idxs) / self.get_num_moves(), 1))
+            idxs: np.ndarray = np.random.choice(idxs, subset_size)
 
-            states_to_move: List[SokobanState] = [states[idx] for idx in idxs]
-            actions = list(np.random.randint(0, self.num_moves, size=len(states_to_move)))
+            move: int = randrange(self.get_num_moves())
+            states_to_move: List[SokobanState] = [states[i] for i in idxs]
+            states_moved: List[SokobanState] = self.next_state(states_to_move, move)[0]
 
-            states_moved, _ = self.next_state(states_to_move, actions)
-
-            for idx_moved, idx in enumerate(idxs):
-                states[idx] = states_moved[idx_moved]
+            for state_moved_idx, state_moved in enumerate(states_moved):
+                states[idxs[state_moved_idx]] = state_moved
 
             step_nums_curr[idxs] = step_nums_curr[idxs] + 1
-            steps_lt[idxs] = step_nums_curr[idxs] < step_nums[idxs]
 
         return states, list(step_nums)
 
-    def _get_next_idx(self, curr_idxs: np.ndarray, actions: List[int]) -> np.ndarray:
-        actions_np: np.array = np.array(actions)
+    def _get_next_idx(self, curr_idxs: np.ndarray, action: int) -> np.ndarray:
+        actions_np: np.array = np.array([action] * curr_idxs.shape[0])
         next_idxs: np.ndarray = curr_idxs.copy()
 
         action_idxs = np.where(actions_np == 0)[0]
@@ -283,7 +281,8 @@ class InteractiveEnv(plt.Axes):
             if event.key.upper() == 'D':
                 action = 3
 
-            self.state = self.env.next_state([self.state], [action])[0][0]
+            # self.states = self.env.next_state(self.states, [action]*len(self.states))[0]
+            self.state = self.env.next_state([self.state], action)[0][0]
             self._update_plot()
             if self.env.is_solved([self.state])[0]:
                 print("SOLVED!")
@@ -293,12 +292,19 @@ class InteractiveEnv(plt.Axes):
         elif event.key.upper() in 'P':
             for i in range(1000):
                 action = self.env.rand_action([self.state])[0]
-                self.state = self.env.next_state([self.state], [action])[0][0]
+                self.state = self.env.next_state([self.state], action)[0][0]
             self._update_plot()
 
 
 def main():
     env: Sokoban = Sokoban(10, 4)
+
+    """
+    states, num_steps = env.generate_states(1000, (1, 1))
+    states_next, _ = env.expand(states)
+    print(sum([max([x != states[idx] for x in states_next[idx]]) for idx in range(len(states))]))
+    breakpoint()
+    """
 
     fig = plt.figure(figsize=(5, 5))
     interactive_env = InteractiveEnv(env, fig)
