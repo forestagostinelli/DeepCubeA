@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 from torch import nn
 
@@ -43,23 +43,6 @@ class SokobanState(State):
         return agents_eq and walls_eq and boxes_eq and goals_eq
 
 
-def load_states(file_name: str) -> List[SokobanState]:
-    states_np = pickle.load(open(file_name, "rb"))
-    states: List[SokobanState] = []
-
-    agent_idxs = np.where(states_np == 1)
-    box_masks = states_np == 2
-    goal_masks = states_np == 3
-    wall_masks = states_np == 4
-
-    for idx in range(states_np.shape[0]):
-        agent_idx = np.array([agent_idxs[1][idx], agent_idxs[2][idx]], dtype=np.int)
-
-        states.append(SokobanState(agent_idx, box_masks[idx], wall_masks[idx], goal_masks[idx]))
-
-    return states
-
-
 class Sokoban(Environment):
 
     def generate_goal_states(self, num_states: int) -> List[State]:
@@ -78,7 +61,12 @@ class Sokoban(Environment):
 
         self.num_moves: int = 4
 
-        # self.states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
+        states_train_np: np.ndarray = pickle.load(open("data/sokoban/train/data_0.pkl", "rb"))
+        self.agent_train_idxs = np.where(states_train_np == 1)
+        self.box_train_masks = states_train_np == 2
+        self.goal_train_masks = states_train_np == 3
+        self.wall_train_masks = states_train_np == 4
+        self.states_train: Optional[List[SokobanState]] = None
 
     def get_num_moves(self) -> int:
         return self.num_moves
@@ -176,9 +164,11 @@ class Sokoban(Environment):
         assert (num_states > 0)
         assert (step_range[0] >= 0)
 
-        states_train: List[SokobanState] = load_states("data/sokoban/train/data_0.pkl")
-        state_idxs = np.random.randint(0, len(states_train), size=num_states)
-        states_seed: List[SokobanState] = [states_train[idx] for idx in state_idxs]
+        if self.states_train is None:
+            self.states_train = self._get_processed_states()
+
+        state_idxs = np.random.randint(0, len(self.states_train), size=num_states)
+        states_seed: List[SokobanState] = [self.states_train[idx] for idx in state_idxs]
 
         states, _ = self._random_walk(states_seed, (1, 100))
         states_goal, num_steps_l = self._random_walk(states, step_range)
@@ -237,6 +227,21 @@ class Sokoban(Environment):
         next_idxs = np.minimum(next_idxs, self.dim-1)
 
         return next_idxs
+
+    def _get_processed_states(self) -> List[SokobanState]:
+        states: List[SokobanState] = []
+
+        for idx in range(self.agent_train_idxs[0].shape[0]):
+            agent_idx = np.array([self.agent_train_idxs[1][idx], self.agent_train_idxs[2][idx]], dtype=np.int)
+
+            states.append(SokobanState(agent_idx, self.box_train_masks[idx], self.wall_train_masks[idx],
+                                       self.goal_train_masks[idx]))
+
+        return states
+
+    def __getstate__(self):
+        self.states_train = None
+        return self.__dict__
 
 
 class InteractiveEnv(plt.Axes):
