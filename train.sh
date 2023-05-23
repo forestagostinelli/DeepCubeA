@@ -69,3 +69,12 @@ python search_methods/astar.py --states data/lightsout7/test/data_0.pkl --model 
 ###### See solution results
 python scripts/compare_solutions.py --soln1 results/lightsout7/results.pkl --soln2 results/lightsout7/results.pkl
 
+### Sokoban
+python ctg_approx/avi.py --env sokoban --states_per_update 5000000 --batch_size 1000 --nnet_name sokoban --max_itrs 1000000 --loss_thresh 1.0 --back_max 1000 --max_update_steps 50 --update_method gbfs --num_update_procs 30 --num_test 1000
+
+###### Solve with A* search, use --verbose for more information
+# NOTE: is faster when just using one GPU because the batch size is small
+python search_methods/astar.py --states data/sokoban/test/data_0.pkl --model saved_models/sokoban/current/ --env sokoban --weight 0.8 --batch_size 1 --results_dir results/sokoban/ --language python --nnet_batch_size 10000
+
+###### See solution results
+python scripts/compare_solutions.py --soln1 results/sokoban/results.pkl --soln2 results/sokoban/results.pkl

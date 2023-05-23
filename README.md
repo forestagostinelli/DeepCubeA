@@ -2,7 +2,7 @@
 This is the code for [DeepCubeA](https://cse.sc.edu/~foresta/assets/files/SolvingTheRubiksCubeWithDeepReinforcementLearningAndSearch_Final.pdf) for python3 and PyTorch.
 The original python2, tensorflow code can be found on [CodeOcean](https://codeocean.com/capsule/5723040/tree/v1).
 
-This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, 48-puzzle, and Lights Out. Sokoban is still being converted from the previous Python 2.7 format.
+This currently contains the code for using DeepCubeA to solve the Rubik's cube, 15-puzzle, 24-puzzle, 35-puzzle, 48-puzzle, Lights Out, and Sokoban.
 
 You can also adapt this code to use DeepCubeA to solve new problems that you might be working on.
 
@@ -21,6 +21,10 @@ directory to your python path.
 `train.sh` contains the commands to trian the cost-to-go function as well as using it with A* search.
 Note that some of the hyperparameters may be slightly different than those in the paper as they were later 
 found to give slightly better results.
+
+For Sokoban, instead of starting from the goal and pulling boxes, as was done in the paper,
+this code starts from random states, takes a random walk, and sets the location of the boxes at the end of the random walk as the goal positions for the boxes. 
+This change was made as it made the code simpler for Sokoban. This approach is similar in spirit to [hindsight experience replay](https://proceedings.neurips.cc/paper/2017/file/453fadbd8a1a3af50a9df4df899537b5-Paper.pdf).
 
 There are pre-trained models in the `saved_models/` directory as well as `output.txt` files to let you know what output to expect.
 
