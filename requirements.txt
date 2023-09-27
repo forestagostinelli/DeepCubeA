@@ -1,3 +1,4 @@
 matplotlib==3.1.1
-numpy==1.22.0
+numpy==1.21.6
 torch==1.2.0
+flask

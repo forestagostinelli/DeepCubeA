@@ -1,0 +1,8 @@
+version: '3.1'
+services:
+  deepcubea:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+       - 5000:5000

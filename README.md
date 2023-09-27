@@ -17,6 +17,21 @@ Python version used: 3.7.2
 IMPORTANT! Before running anything, please execute: `source setup.sh` in the DeepCubeA directory to add the current 
 directory to your python path.
 
+# Docker compose and interface
+You can using docker compose to run and test it.
+```
+docker-compose build
+docker-compose up -d
+```
+Then open the http://localhost:5000/, you will see the Rubik’s cube UI. 
+Pressing Scramble and Solve button to try it.
+
+<div align="center">
+    <a href="./">
+        <img src="./images/UI.png" width="60%"/>
+    </a>
+</div>
+
 # Training and A* Search
 `train.sh` contains the commands to trian the cost-to-go function as well as using it with A* search.
 Note that some of the hyperparameters may be slightly different than those in the paper as they were later 

@@ -1,0 +1,94 @@
+.cube_container {
+	Margin:auto;
+	width: 200px;
+	height: 200px;
+	position: relative;
+	perspective: 1000px;
+}
+
+#solution_container {
+	background-color: #FFFFFF
+}
+
+#cube_div {
+	background-color: #e6e6e6
+}
+
+#button_container {
+	background-color: #FFFFFF
+}
+
+#cube {
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	transform-style: preserve-3d;
+}
+
+#cube figure {
+	margin: 0;
+	width: 200px;
+	height: 200px;
+	display: block;
+	position: absolute;
+	border: 1px solid black;
+	opacity:1.0;
+	background-color: #000000;
+}
+
+.sticker {
+	width: 33.3%;
+	height: 33.3%;
+	background-color: #000000;
+	border: 2px solid black;
+	float: left;
+}
+
+#cube .front {
+	transform: rotateY( 0deg) translateZ(100px);
+}
+
+#cube .back {
+	transform: rotateX( 180deg) translateZ(100px);
+}
+
+#cube .right {
+	transform: rotateY( 90deg) translateZ(100px);
+}
+
+#cube .left {
+	transform: rotateY( -90deg) translateZ(100px);
+}
+
+#cube .top {
+	transform: rotateX( 90deg) translateZ(100px);
+}
+
+#cube .bottom {
+	transform: rotateX( -90deg) translateZ(100px);
+}
+
+#cube {
+	/*transform: translateZ( -100px);*/
+}
+
+button {
+  border: 1px solid #0066cc;
+  background-color: #0099cc;
+  color: #ffffff;
+  padding: 5px 10px;
+}
+
+button:hover {
+  border: 1px solid #0099cc;
+  background-color: #00aacc;
+  color: #ffffff;
+  padding: 5px 10px;
+}
+
+button:disabled,
+button[disabled]{
+  border: 1px solid #999999;
+  background-color: #cccccc;
+  color: #666666;
+}
